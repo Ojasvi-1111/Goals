@@ -1,0 +1,2710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Compass">
+<title>Compass</title>
+<style>
+:root {
+  --bg: #f6f5f2; --surface: #ffffff; --text: #1c1c1e; --muted: #5c5f66; --line: #dedbd4;
+  --accent: #2c6b66; --on-accent: #ffffff;
+  --danger: #a3221b; --danger-bg: #fdeceb; --warn: #6a4d00; --warn-bg: #fff3d4;
+  --info: #1f4f4b; --info-bg: #e3f0ee; --good: #1d6b39; --bad: #a3221b;
+  --radius: 12px; --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212; --surface: #1e1e1e; --text: #ececec; --muted: #a8a8ad; --line: #34343a;
+    --accent: #7cc4bc; --on-accent: #0d2421;
+    --danger: #ff9a92; --danger-bg: #3b1d1b; --warn: #f3d488; --warn-bg: #362c17;
+    --info: #a9dcd5; --info-bg: #19302d; --good: #86d39c; --bad: #ff9a92;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px; line-height: 1.5; min-height: 100vh; min-height: 100dvh;
+}
+#app {
+  max-width: 640px; margin: 0 auto; overflow-wrap: anywhere;
+  padding: var(--s4) max(var(--s4), env(safe-area-inset-right)) calc(var(--s6) + env(safe-area-inset-bottom)) max(var(--s4), env(safe-area-inset-left));
+}
+h1 { font-size: 1.5rem; line-height: 1.25; margin: 0 0 var(--s1); }
+h1:focus { outline: none; }
+h2 { font-size: 1.125rem; line-height: 1.3; margin: 0 0 var(--s2); }
+p { margin: 0 0 var(--s3); }
+.brand { font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 0 0 var(--s1); }
+.muted { color: var(--muted); }
+.small { font-size: 0.875rem; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s4); margin: var(--s4) 0; }
+.card.problem { border-color: var(--danger); }
+.btn {
+  font: inherit; font-size: 1rem; min-height: 44px; min-width: 44px; padding: var(--s2) var(--s4); margin: var(--s1) var(--s2) var(--s1) 0;
+  border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.banner { border-radius: var(--radius); padding: var(--s3) var(--s4); margin: 0 0 var(--s4); border: 1px solid transparent; }
+.banner.danger { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); font-weight: 600; }
+.banner.warn { background: var(--warn-bg); color: var(--warn); }
+.banner.info { background: var(--info-bg); color: var(--info); font-weight: 600; }
+.banner .btn { margin: var(--s2) 0 0; }
+dl.kv { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: var(--s1) var(--s4); margin: 0; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; }
+ul.plain { list-style: none; padding: 0; margin: 0; }
+ul.plain li { padding: var(--s3) 0; border-top: 1px solid var(--line); }
+ul.plain li:first-child { border-top: 0; }
+ul.errors { margin: 0 0 var(--s3); padding-left: 1.25rem; }
+.result { font-weight: 600; margin-top: var(--s3); }
+.result.good { color: var(--good); }
+.result.bad { color: var(--bad); }
+ol.tests { list-style: none; padding: 0; margin: var(--s3) 0 0; }
+ol.tests li { padding: var(--s2) 0; border-top: 1px solid var(--line); }
+.mark { display: inline-block; width: 1.5em; font-weight: 700; }
+li.pass .mark { color: var(--good); }
+li.fail .mark { color: var(--bad); }
+.why { margin: var(--s1) 0 0 1.5em; font-size: 0.875rem; color: var(--muted); white-space: pre-wrap; }
+.sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+textarea {
+  display: block; width: 100%; min-height: 8rem; margin: var(--s2) 0; padding: var(--s2);
+  font: inherit; font-size: 16px; color: var(--text); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; white-space: pre-wrap;
+}
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--s5) + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  max-width: min(90vw, 560px); padding: var(--s3) var(--s4); border-radius: 10px;
+  background: var(--text); color: var(--bg); opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+.toast.show { opacity: 1; }
+
+/* ---- Phase 2: links, buttons, layout ---- */
+a { color: var(--accent); }
+a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; line-height: 1.3; }
+.btn.danger { color: var(--danger); border-color: var(--danger); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin: var(--s3) 0; }
+.actions .btn { margin: 0; }
+.linkbtn { font: inherit; font-size: 0.9375rem; min-height: 44px; padding: 0; border: 0; background: none; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.topbar { display: flex; align-items: center; gap: var(--s2); min-height: 44px; margin: 0 0 var(--s3); }
+.topbar .brand { margin: 0; }
+.spacer { flex: 1; }
+.iconbtn { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border-radius: 10px; color: var(--text); text-decoration: none; font-size: 1.375rem; }
+.backbtn { font: inherit; display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s2) 0 0; border: 0; background: none; color: var(--accent); font-weight: 600; cursor: pointer; }
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; justify-content: center;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.tabbar a { flex: 1; max-width: 220px; display: flex; align-items: center; justify-content: center; min-height: 56px; color: var(--muted); text-decoration: none; font-weight: 600; }
+.tabbar a[aria-current="page"] { color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
+body.has-nav #app { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+body.has-nav .toast { bottom: calc(72px + env(safe-area-inset-bottom)); }
+.sub { color: var(--muted); margin: 0 0 var(--s3); }
+h2.section { margin: var(--s5) 0 var(--s2); }
+.count { color: var(--muted); font-weight: 400; }
+.empty { text-align: center; padding: var(--s5) var(--s4); }
+.multiline { white-space: pre-wrap; }
+.overdue { color: var(--danger); font-weight: 600; }
+
+/* ---- Goal cards and status ---- */
+.goal-card { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s3) var(--s4); margin: 0 0 var(--s3); color: var(--text); text-decoration: none; }
+.goal-card.infocus { border-left: 4px solid var(--accent); }
+.gc-top { display: flex; align-items: flex-start; gap: var(--s2); }
+.gc-title { flex: 1; min-width: 0; font-weight: 600; font-size: 1.0625rem; line-height: 1.35; }
+.gc-why { margin: var(--s1) 0 0; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.gc-row { display: flex; gap: var(--s2); margin-top: var(--s1); font-size: 0.9375rem; }
+.gc-row .label { color: var(--muted); flex: 0 0 5.5rem; }
+.gc-row .val { flex: 1; min-width: 0; }
+.strip { display: flex; gap: 6px; margin-top: var(--s2); color: var(--muted); }
+.strip .cell { width: 1.25rem; text-align: center; }
+.strip .yes, .strip .some { color: var(--accent); }
+.badge { display: inline-block; padding: 2px var(--s2); border-radius: 999px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+.badge.stall { color: var(--warn); background: var(--warn-bg); }
+.chip { display: inline-block; padding: 2px var(--s3); border-radius: 999px; border: 1px solid currentColor; font-size: 0.875rem; font-weight: 600; margin: 0 0 var(--s2); }
+.chip.active { color: var(--accent); }
+.chip.parked { color: var(--warn); }
+.chip.achieved { color: var(--good); }
+.chip.dropped { color: var(--muted); }
+
+/* ---- Forms ---- */
+.field { margin: 0 0 var(--s4); }
+fieldset.field { border: 0; padding: 0; min-width: 0; }
+.field > label, .field > legend { display: block; font-weight: 600; margin: 0 0 var(--s1); padding: 0; }
+.hint { font-size: 0.875rem; color: var(--muted); margin: var(--s1) 0 0; }
+input[type="text"], input[type="date"], select {
+  display: block; width: 100%; min-height: 44px; padding: var(--s2); font: inherit; font-size: 16px;
+  color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+}
+textarea.short { min-height: 5rem; }
+.row2 { display: flex; gap: var(--s2); }
+.row2 > * { flex: 1; min-width: 0; }
+.check { display: flex; align-items: center; gap: var(--s2); min-height: 44px; }
+.check input { width: 22px; height: 22px; margin: 0; }
+.changebox { background: var(--info-bg); border: 1px solid var(--accent); border-radius: var(--radius); padding: var(--s3) var(--s4); margin: 0 0 var(--s4); }
+.notice { background: var(--warn-bg); border-radius: var(--radius); padding: var(--s3) var(--s4); margin: 0 0 var(--s4); }
+.inline-form { display: flex; gap: var(--s2); align-items: stretch; }
+.inline-form input { flex: 1; min-width: 0; }
+.inline-form .btn { margin: 0; }
+
+/* ---- History, reorder, shelf ---- */
+.timeline { list-style: none; padding: 0; margin: 0; }
+.timeline > li { padding: var(--s3) 0; border-top: 1px solid var(--line); }
+.timeline > li:first-child { border-top: 0; }
+.tl-meta { font-size: 0.875rem; color: var(--muted); }
+.tl-diffs { margin: var(--s1) 0 0; padding-left: 1.1rem; }
+.tl-reason { margin: var(--s1) 0 0; white-space: pre-wrap; }
+.tag { display: inline-block; font-size: 0.75rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 var(--s2); margin-left: var(--s2); }
+.reorder { list-style: none; padding: 0; margin: 0; }
+.reorder > li { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) 0; border-top: 1px solid var(--line); }
+.reorder > li:first-child { border-top: 0; }
+.reorder .name { flex: 1; min-width: 0; }
+.reorder .btn { margin: 0; }
+.shelf-item { display: block; padding: var(--s3) 0; border-top: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.shelf-item:first-child { border-top: 0; }
+.shelf-item .t { font-weight: 600; }
+.shelf-item .m { font-size: 0.875rem; color: var(--muted); }
+.shelf-item .r { font-size: 0.875rem; margin-top: var(--s1); white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---- Pop-up dialogs (never with text fields: rule 8) ---- */
+body.dialog-open { overflow: hidden; }
+.dialog-backdrop {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(0, 0, 0, 0.45); padding: var(--s4) var(--s4) calc(var(--s4) + env(safe-area-inset-bottom));
+}
+.dialog { width: 100%; max-width: 480px; max-height: 85vh; overflow: auto; background: var(--surface); color: var(--text); border-radius: var(--radius); padding: var(--s4); }
+.dialog h2 { margin-top: 0; }
+.dialog .actions { justify-content: flex-end; }
+.dialog .choice { display: flex; width: 100%; justify-content: flex-start; text-align: left; margin: 0 0 var(--s2); }
+@media (min-width: 600px) { .dialog-backdrop { align-items: center; } }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<noscript><p style="padding:16px">Compass needs JavaScript turned on.</p></noscript>
+<script>
+'use strict';
+
+/* =============================== CONFIG =============================== */
+const APP_VERSION = '0.2.0';
+const SCHEMA_VERSION = 1;
+const APP_ID = 'compass';
+const MAX_ACTIVE = 12;
+const MAX_FOCUS = 3;
+const LIMITS = { title: 80, why: 280, doneLooksLike: 280, nextAction: 160, milestone: 160, reason: 280, note: 280 };
+const DEFAULT_SETTINGS = { weekStartsOn: 1, staleAfter: 3, lastExportAt: null, backupSnoozeUntil: null, installHintDismissed: false };
+const STATUSES = ['active', 'parked', 'achieved', 'dropped'];
+const TRANSITIONS = { active: ['parked', 'achieved', 'dropped'], parked: ['active', 'dropped'], achieved: ['active'], dropped: ['active'] };
+const MILESTONE_STATUSES = ['current', 'done', 'dropped'];
+const CHANGE_KINDS = ['created', 'edited', 'status', 'milestone-added', 'milestone-done', 'milestone-edited', 'milestone-replaced'];
+const DIFF_FIELDS = ['title', 'why', 'doneLooksLike', 'targetMonth', 'status', 'revisitOn', 'milestone', 'milestoneDue'];
+const EDITOR_FIELDS = ['title', 'why', 'doneLooksLike', 'targetMonth'];
+const PROGRESS = ['yes', 'some', 'no'];
+const KEY_PREFIX = 'compass:';
+const KEYS = { data: 'compass:data', safety: 'compass:safety', draftPrefix: 'compass:draft:goal:', probe: 'compass:probe' };
+const SAFETY_MAX = 3;
+const IMPORT_MAX_BYTES = 5 * 1024 * 1024;
+const DRAFT_MAX_DAYS = 14;
+const DEFAULT_REVISIT_DAYS = 28;
+const DAY_MS = 86400000;
+
+/* =============================== UTIL =============================== */
+class UserError extends Error {
+  constructor(message) { super(message); this.name = 'UserError'; }
+}
+function fail(message) { throw new UserError(message); }
+function clone(x) { return JSON.parse(JSON.stringify(x)); }
+function isObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
+function isStr(x) { return typeof x === 'string'; }
+function isInt(x) { return Number.isInteger(x); }
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) if (!deepEqual(a[i], b[i])) return false;
+    return true;
+  }
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  for (const k of ka) {
+    if (!Object.prototype.hasOwnProperty.call(b, k) || !deepEqual(a[k], b[k])) return false;
+  }
+  return true;
+}
+function cleanText(v) { return isStr(v) ? v.trim() : ''; }
+function cleanLine(v) { return isStr(v) ? v.replace(/\s*[\r\n]+\s*/g, ' ').trim() : ''; }
+function checkLen(label, s, max, required) {
+  if (required && s.length === 0) fail(label + ' is required.');
+  if (s.length > max) fail(label + ' must be ' + max + ' characters or fewer.');
+}
+function utf8Bytes(s) {
+  try { return new TextEncoder().encode(s).length; } catch (e) { return s.length * 3; }
+}
+// The one place allowed to use randomness and, as a last resort, the clock (rule 12).
+function makeIdGen(c) {
+  let counter = 0;
+  return function () {
+    try { if (c && typeof c.randomUUID === 'function') return c.randomUUID(); } catch (e) { /* try the next method */ }
+    try {
+      if (c && typeof c.getRandomValues === 'function') {
+        const b = c.getRandomValues(new Uint8Array(16));
+        b[6] = (b[6] & 0x0f) | 0x40;
+        b[8] = (b[8] & 0x3f) | 0x80;
+        const x = Array.from(b, n => n.toString(16).padStart(2, '0')).join('');
+        return x.slice(0, 8) + '-' + x.slice(8, 12) + '-' + x.slice(12, 16) + '-' + x.slice(16, 20) + '-' + x.slice(20, 32);
+      }
+    } catch (e) { /* try the next method */ }
+    counter += 1;
+    return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12) + '-' + counter.toString(36);
+  };
+}
+const newId = makeIdGen(typeof crypto !== 'undefined' ? crypto : null);
+
+/* =============================== DATES =============================== */
+// Timestamps are ISO UTC strings. Calendar dates are plain strings (YYYY-MM-DD, YYYY-MM).
+// Calendar arithmetic goes through UTC. Only todayLocal() reads the device time zone.
+function pad2(n) { return String(n).padStart(2, '0'); }
+function ymd(y, m, d) { return String(y).padStart(4, '0') + '-' + pad2(m) + '-' + pad2(d); }
+function parseYMD(s) {
+  if (!isStr(s)) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (y < 1000 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const t = Date.UTC(y, mo - 1, d);
+  const back = new Date(t);
+  if (back.getUTCFullYear() !== y || back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d) return null;
+  return { y, m: mo, d, t };
+}
+function isYMD(s) { return parseYMD(s) !== null; }
+function mustYMD(s) {
+  const p = parseYMD(s);
+  if (!p) throw new Error('Not a calendar date: ' + s);
+  return p;
+}
+function isYM(s) {
+  if (!isStr(s)) return false;
+  const m = /^(\d{4})-(\d{2})$/.exec(s);
+  return !!m && Number(m[1]) >= 1000 && Number(m[2]) >= 1 && Number(m[2]) <= 12;
+}
+function isISO(s) { return isStr(s) && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && !isNaN(Date.parse(s)); }
+function isoNow(now) { return now.toISOString(); }
+function todayLocal(now) { return ymd(now.getFullYear(), now.getMonth() + 1, now.getDate()); }
+function fromUTCms(t) { const x = new Date(t); return ymd(x.getUTCFullYear(), x.getUTCMonth() + 1, x.getUTCDate()); }
+function addDays(s, n) { return fromUTCms(mustYMD(s).t + n * DAY_MS); }
+function diffDays(a, b) { return Math.round((mustYMD(b).t - mustYMD(a).t) / DAY_MS); } // days from a to b
+function weekdayOf(s) { return new Date(mustYMD(s).t).getUTCDay(); }                    // 0 = Sunday
+function weekStart(s, weekStartsOn) { return addDays(s, -((weekdayOf(s) - weekStartsOn + 7) % 7)); }
+function currentWeekKey(now, weekStartsOn) { return weekStart(todayLocal(now), weekStartsOn); }
+function monthOf(s) { return s.slice(0, 7); }
+function addMonthsYM(ym, n) {
+  const y = Number(ym.slice(0, 4));
+  const m0 = Number(ym.slice(5, 7)) - 1 + n;
+  const yy = y + Math.floor(m0 / 12);
+  const mm = ((m0 % 12) + 12) % 12 + 1;
+  return String(yy).padStart(4, '0') + '-' + pad2(mm);
+}
+function isMonthOverdue(targetMonth, today) { return !!targetMonth && monthOf(today) > targetMonth; }
+function isDateOverdue(dueDate, today) { return !!dueDate && today > dueDate; }
+function fmtYMD(s, opts) {
+  const p = parseYMD(s);
+  if (!p) return '';
+  return new Date(p.t).toLocaleDateString(undefined, Object.assign({ timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' }, opts || {}));
+}
+function fmtYM(s) {
+  if (!isYM(s)) return '';
+  return new Date(Date.UTC(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, 1)).toLocaleDateString(undefined, { timeZone: 'UTC', month: 'short', year: 'numeric' });
+}
+
+/* =============================== MODEL =============================== */
+function defaultDoc(now) {
+  const iso = isoNow(now);
+  return { app: APP_ID, schemaVersion: SCHEMA_VERSION, rev: 0, createdAt: iso, updatedAt: iso, settings: clone(DEFAULT_SETTINGS), goals: [], changes: [], checkins: [] };
+}
+
+// MIGRATIONS[n] turns a schema-n doc into schema n + 1. Schema 1 is the first, so none exist yet.
+// Anything that is not an object, or has no whole-number schemaVersion, comes back unchanged for validate to reject.
+const MIGRATIONS = {};
+function migrate(obj) {
+  if (!isObj(obj)) return obj;
+  let doc = clone(obj);
+  while (isInt(doc.schemaVersion) && doc.schemaVersion < SCHEMA_VERSION) {
+    const step = MIGRATIONS[doc.schemaVersion];
+    if (typeof step !== 'function') throw new Error('no upgrade path from schema ' + doc.schemaVersion);
+    doc = step(doc);
+  }
+  return doc;
+}
+
+/* Selectors */
+function goalById(doc, id) { return doc.goals.find(g => g.id === id) || null; }
+function activeGoals(doc) { return doc.goals.filter(g => g.status === 'active'); }
+function focusGoals(doc) { return doc.goals.filter(g => g.status === 'active' && g.inFocus); }
+function currentMilestone(goal) { return goal.milestones.find(m => m.status === 'current') || null; }
+function draftCheckin(doc) { return doc.checkins.find(c => c.completedAt === null) || null; }
+function checkinByWeek(doc, weekKey) { return doc.checkins.find(c => c.weekKey === weekKey) || null; }
+function completedNewestFirst(doc) {
+  return doc.checkins.filter(c => c.completedAt !== null).sort((a, b) => (a.weekKey < b.weekKey ? 1 : a.weekKey > b.weekKey ? -1 : 0));
+}
+// True when no finished check-in is newer than weekKey. Check-ins dated after the current week
+// (made while the device clock was wrong) are ignored, so they cannot block later updates.
+function isLatestCompleted(doc, weekKey, now) {
+  const cur = currentWeekKey(now, doc.settings.weekStartsOn);
+  return !doc.checkins.some(c => c.completedAt !== null && c.weekKey > weekKey && c.weekKey <= cur);
+}
+// Answers from finished check-ins, newest week first, from weeks before beforeWeekKey (null: all weeks).
+// Check-ins that do not include the goal are skipped.
+function answersFor(doc, goalId, beforeWeekKey) {
+  const out = [];
+  completedNewestFirst(doc).forEach(c => {
+    if (beforeWeekKey && c.weekKey >= beforeWeekKey) return;
+    const it = c.items.find(i => i.goalId === goalId);
+    if (it && it.progress) out.push({ weekKey: c.weekKey, progress: it.progress, note: it.note });
+  });
+  return out;
+}
+// Stalled when the most recent staleAfter answers are all "no". Future-dated check-ins are ignored.
+function isStalled(doc, goalId, now) {
+  const n = doc.settings.staleAfter;
+  const nextWeek = addDays(currentWeekKey(now, doc.settings.weekStartsOn), 7);
+  const recent = answersFor(doc, goalId, nextWeek).slice(0, n);
+  return recent.length === n && recent.every(a => a.progress === 'no');
+}
+function shouldPromptStall(doc, goalId, weekKey, progress) {
+  if (progress !== 'no') return false;
+  const g = goalById(doc, goalId);
+  if (!g) return false;
+  if (g.staleSnoozeUntil && weekKey < g.staleSnoozeUntil) return false;
+  const n = doc.settings.staleAfter;
+  const earlier = answersFor(doc, goalId, weekKey).slice(0, n - 1);
+  return earlier.length === n - 1 && earlier.every(a => a.progress === 'no');
+}
+function defaultCheckinWeek(doc, now) {
+  const today = todayLocal(now);
+  const cur = weekStart(today, doc.settings.weekStartsOn);
+  const prev = addDays(cur, -7);
+  const prevDone = doc.checkins.some(c => c.weekKey === prev && c.completedAt !== null);
+  return (!prevDone && diffDays(cur, today) <= 2) ? prev : cur;
+}
+function nextStepGoalId(doc, checkin) {
+  for (const g of activeGoals(doc)) {
+    const it = checkin.items.find(i => i.goalId === g.id);
+    if (!it || it.progress === null) return g.id;
+  }
+  return null; // null means the focus step comes next
+}
+function revisitsDue(doc, now) {
+  const today = todayLocal(now);
+  return doc.goals.filter(g => g.status === 'parked' && g.revisitOn !== null && g.revisitOn <= today);
+}
+// yes | some | no | excluded (check-in without this goal) | none (no check-in that week)
+function cellState(doc, goalId, weekKey) {
+  const c = doc.checkins.find(x => x.weekKey === weekKey && x.completedAt !== null);
+  if (!c) return 'none';
+  const it = c.items.find(i => i.goalId === goalId);
+  return it ? it.progress : 'excluded';
+}
+
+/* Invariants (spec section 4). Returns a list of problems; empty means valid. */
+function validate(doc) {
+  const errs = [];
+  const E = msg => { errs.push(msg); };
+  if (!isObj(doc)) return ['The data is not an object.'];
+  if (doc.app !== APP_ID) E('app must be "' + APP_ID + '".');
+  if (doc.schemaVersion !== SCHEMA_VERSION) E('schemaVersion must be ' + SCHEMA_VERSION + '.');
+  if (!isInt(doc.rev) || doc.rev < 0) E('rev must be a whole number.');
+  if (!isISO(doc.createdAt) || !isISO(doc.updatedAt)) E('createdAt and updatedAt must be timestamps.');
+  if (!isObj(doc.settings) || !Array.isArray(doc.goals) || !Array.isArray(doc.changes) || !Array.isArray(doc.checkins)) {
+    E('settings, goals, changes or checkins is missing or the wrong type.');
+    return errs;
+  }
+  const s = doc.settings;
+  if (!isInt(s.weekStartsOn) || s.weekStartsOn < 0 || s.weekStartsOn > 6) E('settings.weekStartsOn must be 0 to 6.');
+  if (!isInt(s.staleAfter) || s.staleAfter < 2 || s.staleAfter > 6) E('settings.staleAfter must be 2 to 6.');
+  if (s.lastExportAt !== null && !isISO(s.lastExportAt)) E('settings.lastExportAt must be a timestamp or empty.');
+  if (s.backupSnoozeUntil !== null && !isYMD(s.backupSnoozeUntil)) E('settings.backupSnoozeUntil must be a date or empty.');
+  if (typeof s.installHintDismissed !== 'boolean') E('settings.installHintDismissed must be true or false.');
+
+  const seen = new Set();
+  const checkId = (id, where) => {
+    if (!isStr(id) || id === '') { E(where + ' has no id.'); return; }
+    if (seen.has(id)) E(where + ' repeats id ' + id + '.');
+    seen.add(id);
+  };
+
+  const goalIds = new Set();
+  let focusCount = 0;
+  doc.goals.forEach((g, gi) => {
+    const w = 'Goal ' + (gi + 1);
+    if (!isObj(g)) { E(w + ' is not an object.'); return; }
+    checkId(g.id, w);
+    if (isStr(g.id)) goalIds.add(g.id);
+    if (!isStr(g.title) || g.title.trim() === '') E(w + ' has no title.');
+    if (!isStr(g.why) || !isStr(g.doneLooksLike) || !isStr(g.nextAction)) E(w + ': why, doneLooksLike and nextAction must be text.');
+    if (g.targetMonth !== null && !isYM(g.targetMonth)) E(w + ': targetMonth must be YYYY-MM or empty.');
+    if (!STATUSES.includes(g.status)) E(w + ': unknown status.');
+    if (typeof g.inFocus !== 'boolean') E(w + ': inFocus must be true or false.');
+    else if (g.inFocus && g.status !== 'active') E(w + ' is in focus but not active.');
+    else if (g.inFocus) focusCount += 1;
+    if (g.revisitOn !== null && !isYMD(g.revisitOn)) E(w + ': revisitOn must be a date or empty.');
+    else if (g.revisitOn !== null && g.status !== 'parked') E(w + ' has a revisit date but is not parked.');
+    if (g.staleSnoozeUntil !== null && !isYMD(g.staleSnoozeUntil)) E(w + ': staleSnoozeUntil must be a date or empty.');
+    if (!isISO(g.createdAt) || !isISO(g.updatedAt)) E(w + ': createdAt and updatedAt must be timestamps.');
+    if (g.closedAt !== null && !isISO(g.closedAt)) E(w + ': closedAt must be a timestamp or empty.');
+    if (!Array.isArray(g.milestones)) { E(w + ': milestones must be a list.'); return; }
+    let current = 0;
+    g.milestones.forEach((m, mi) => {
+      const mw = w + ', milestone ' + (mi + 1);
+      if (!isObj(m)) { E(mw + ' is not an object.'); return; }
+      checkId(m.id, mw);
+      if (!isStr(m.text) || m.text.trim() === '') E(mw + ' has no text.');
+      if (m.dueDate !== null && !isYMD(m.dueDate)) E(mw + ': dueDate must be a date or empty.');
+      if (!MILESTONE_STATUSES.includes(m.status)) E(mw + ': unknown status.');
+      if (m.status === 'current') current += 1;
+      if (!isISO(m.createdAt)) E(mw + ': createdAt must be a timestamp.');
+      if (m.closedAt !== null && !isISO(m.closedAt)) E(mw + ': closedAt must be a timestamp or empty.');
+    });
+    if (current > 1) E(w + ' has more than one current milestone.');
+    if (current > 0 && (g.status === 'achieved' || g.status === 'dropped')) E(w + ' is closed but still has a current milestone.');
+  });
+  if (focusCount > MAX_FOCUS) E('More than ' + MAX_FOCUS + ' goals are in focus.');
+
+  doc.changes.forEach((c, ci) => {
+    const w = 'History entry ' + (ci + 1);
+    if (!isObj(c)) { E(w + ' is not an object.'); return; }
+    checkId(c.id, w);
+    if (!goalIds.has(c.goalId)) E(w + ' points to a goal that does not exist.');
+    if (!isISO(c.at)) E(w + ': at must be a timestamp.');
+    if (!CHANGE_KINDS.includes(c.kind)) E(w + ': unknown kind.');
+    if (!Array.isArray(c.diffs)) E(w + ': diffs must be a list.');
+    else c.diffs.forEach(df => {
+      const okDiff = isObj(df) && DIFF_FIELDS.includes(df.field) && ('from' in df) && ('to' in df)
+        && (df.from === null || isStr(df.from)) && (df.to === null || isStr(df.to));
+      if (!okDiff) E(w + ' has a malformed change.');
+    });
+    if (!isStr(c.reason)) E(w + ': reason must be text.');
+    if (typeof c.minor !== 'boolean') E(w + ': minor must be true or false.');
+  });
+
+  const weeks = new Set();
+  let drafts = 0;
+  doc.checkins.forEach((c, ci) => {
+    const w = 'Check-in ' + (ci + 1);
+    if (!isObj(c)) { E(w + ' is not an object.'); return; }
+    checkId(c.id, w);
+    if (!isYMD(c.weekKey)) E(w + ': weekKey must be a date.');
+    else {
+      if (weeks.has(c.weekKey)) E(w + ' repeats the week of ' + c.weekKey + '.');
+      weeks.add(c.weekKey);
+      if (weekdayOf(c.weekKey) !== s.weekStartsOn) E(w + ' does not start on the chosen first day of the week.');
+    }
+    if (!isISO(c.startedAt)) E(w + ': startedAt must be a timestamp.');
+    if (c.completedAt === null) drafts += 1;
+    else if (!isISO(c.completedAt)) E(w + ': completedAt must be a timestamp or empty.');
+    if (!Array.isArray(c.items)) E(w + ': items must be a list.');
+    else {
+      const inThis = new Set();
+      c.items.forEach((it, ii) => {
+        const iw = w + ', item ' + (ii + 1);
+        if (!isObj(it)) { E(iw + ' is not an object.'); return; }
+        if (!goalIds.has(it.goalId)) E(iw + ' points to a goal that does not exist.');
+        if (inThis.has(it.goalId)) E(iw + ' repeats a goal.');
+        inThis.add(it.goalId);
+        if (it.progress !== null && !PROGRESS.includes(it.progress)) E(iw + ': unknown progress.');
+        if (it.progress === null && c.completedAt !== null) E(iw + ' is unanswered in a finished check-in.');
+        if (!isStr(it.note)) E(iw + ': note must be text.');
+        if (it.nextAction !== null && !isStr(it.nextAction)) E(iw + ': nextAction must be text or empty.');
+      });
+    }
+    if (!Array.isArray(c.focusGoalIds) || !c.focusGoalIds.every(x => isStr(x))) E(w + ': focusGoalIds must be a list of ids.');
+    else if (!c.focusGoalIds.every(x => goalIds.has(x))) E(w + ' has a focus goal that does not exist.');
+  });
+  if (drafts > 1) E('There is more than one draft check-in.');
+  return errs;
+}
+
+/* Safe repairs only (spec section 7, boot step 4). Anything else is left for the recovery screen.
+   Never throws: data too damaged to repair comes back unchanged, so validation sends it to recovery. */
+function repairDoc(doc, now) {
+  try {
+    if (!isObj(doc) || !Array.isArray(doc.goals) || !Array.isArray(doc.changes) || !Array.isArray(doc.checkins)) return doc;
+    const sane = doc.goals.every(g => isObj(g) && Array.isArray(g.milestones) && g.milestones.every(m => isObj(m)))
+      && doc.changes.every(c => isObj(c))
+      && doc.checkins.every(c => isObj(c) && Array.isArray(c.items) && c.items.every(i => isObj(i)) && Array.isArray(c.focusGoalIds));
+    if (!sane) return doc;
+    const d = clone(doc);
+    const iso = isoNow(now);
+    const ids = new Set(d.goals.map(g => g.id));
+    let inFocus = 0;
+    d.goals.forEach(g => {
+      if (g.inFocus && g.status !== 'active') g.inFocus = false;
+      if (g.inFocus) { inFocus += 1; if (inFocus > MAX_FOCUS) g.inFocus = false; }
+      if (g.revisitOn !== null && g.status !== 'parked') g.revisitOn = null;
+      const current = g.milestones.filter(m => m.status === 'current');
+      if (current.length > 1) {
+        const keep = current.reduce((a, b) => (b.createdAt >= a.createdAt ? b : a));
+        current.forEach(m => { if (m !== keep) { m.status = 'dropped'; m.closedAt = iso; } });
+      }
+    });
+    d.changes = d.changes.filter(c => ids.has(c.goalId));
+    d.checkins.forEach(c => {
+      c.items = c.items.filter(i => ids.has(i.goalId));
+      c.focusGoalIds = c.focusGoalIds.filter(id => ids.has(id));
+    });
+    return d;
+  } catch (e) {
+    return doc;
+  }
+}
+
+/* Demo data: 6 goals, 10 finished weeks, built around "now". Pure apart from ids. */
+function makeDemoDoc(now) {
+  const d = defaultDoc(now);
+  const today = todayLocal(now);
+  const cur = weekStart(today, d.settings.weekStartsOn);
+  const weeks = [];
+  for (let i = 10; i >= 1; i -= 1) weeks.push(addDays(cur, -7 * i));
+  const at = (day, hour) => new Date(mustYMD(day).t + hour * 3600000).toISOString();
+  const start = addDays(weeks[0], -3);
+  const month = monthOf(today);
+  d.createdAt = at(start, 8);
+
+  const mk = (title, why, done, monthsAhead, nextAction) => ({
+    id: newId(), title, why, doneLooksLike: done, targetMonth: addMonthsYM(month, monthsAhead), nextAction,
+    status: 'active', inFocus: false, revisitOn: null, staleSnoozeUntil: null, milestones: [],
+    createdAt: at(start, 9), updatedAt: at(start, 9), closedAt: null,
+  });
+  const exams = mk('Pass final MBBS exams with distinction', 'Strong marks keep the specialty I want within reach.', 'Distinction in medicine and surgery on the final results.', 4, 'Timed mock paper on Sunday morning');
+  const residency = mk('Get into an internal medicine residency', 'Medicine postings are the work I enjoy most.', 'An offer for an internal medicine seat I am happy with.', 14, 'Ask the unit head about a recommendation letter');
+  const report = mk('Publish a case report', 'I want to learn how a paper gets written, and it helps applications.', 'A case report accepted by an indexed journal.', 6, 'Email the registrar about the consent form');
+  const run = mk('Run a half marathon', 'Running keeps me steady through exam season.', 'Finish 21 km without walking.', 4, 'Long run of 12 km on Saturday');
+  const spanish = mk('Learn conversational Spanish', 'For an elective abroad one day.', 'Hold a ten-minute conversation.', 10, '');
+  const acls = mk('Complete BLS and ACLS certification', 'Required before internship starts.', 'Both certificates in hand.', 1, '');
+  d.goals = [exams, residency, report, run, spanish, acls];
+
+  const ms = (text, dueDate, created) => ({ id: newId(), text, dueDate, status: 'current', createdAt: created, closedAt: null });
+  const change = (goal, when, kind, diffs, reason) => {
+    d.changes.push({ id: newId(), goalId: goal.id, at: when, kind, diffs, reason: reason || '', minor: false });
+  };
+
+  d.goals.forEach(g => {
+    const firstTarget = g === exams ? addMonthsYM(month, 3) : g.targetMonth;
+    change(g, at(start, 9), 'created', [
+      { field: 'title', from: null, to: g.title },
+      { field: 'why', from: null, to: g.why },
+      { field: 'doneLooksLike', from: null, to: g.doneLooksLike },
+      { field: 'targetMonth', from: null, to: firstTarget },
+    ], '');
+  });
+
+  const t0 = at(start, 10);
+  const exams1 = ms('Finish the first pass of medicine', null, t0);
+  const report1 = ms('Write up the case in full', null, t0);
+  const acls1 = ms('Book and attend the ACLS course', null, t0);
+  exams.milestones.push(exams1);
+  report.milestones.push(report1);
+  run.milestones.push(ms('Comfortable 15 km long run', addDays(today, 30), t0));
+  spanish.milestones.push(ms('Finish a beginner course', null, t0));
+  acls.milestones.push(acls1);
+  [exams, report, run, spanish, acls].forEach(g => {
+    const m = g.milestones[0];
+    const diffs = [{ field: 'milestone', from: null, to: m.text }];
+    if (m.dueDate) diffs.push({ field: 'milestoneDue', from: null, to: m.dueDate });
+    change(g, t0, 'milestone-added', diffs, '');
+  });
+
+  const mid = i => at(addDays(weeks[i], 2), 12);
+  change(exams, mid(1), 'edited', [{ field: 'targetMonth', from: addMonthsYM(month, 3), to: exams.targetMonth }], 'The exam dates were announced.');
+
+  const resM = ms('Draft the personal statement', addDays(today, 21), mid(3));
+  residency.milestones.push(resM);
+  change(residency, mid(3), 'milestone-added', [{ field: 'milestone', from: null, to: resM.text }, { field: 'milestoneDue', from: null, to: resM.dueDate }], '');
+
+  exams1.status = 'done';
+  exams1.closedAt = mid(4);
+  change(exams, mid(4), 'milestone-done', [{ field: 'milestone', from: exams1.text, to: null }], '');
+  const exams2 = ms('First full revision of medicine and surgery', addDays(today, 42), mid(4));
+  exams.milestones.push(exams2);
+  change(exams, mid(4), 'milestone-added', [{ field: 'milestone', from: null, to: exams2.text }, { field: 'milestoneDue', from: null, to: exams2.dueDate }], '');
+
+  spanish.status = 'parked';
+  spanish.revisitOn = addDays(today, -1);
+  spanish.updatedAt = mid(4);
+  change(spanish, mid(4), 'status', [{ field: 'status', from: 'active', to: 'parked' }, { field: 'revisitOn', from: null, to: spanish.revisitOn }], 'Exams come first. Revisit after finals.');
+
+  report1.status = 'dropped';
+  report1.closedAt = mid(6);
+  const report2 = ms('Get patient consent and find a co-author', null, mid(6));
+  report.milestones.push(report2);
+  change(report, mid(6), 'milestone-replaced', [{ field: 'milestone', from: report1.text, to: report2.text }], 'Cannot write it up before consent is in place.');
+
+  acls.status = 'achieved';
+  acls.closedAt = mid(6);
+  acls.updatedAt = mid(6);
+  acls1.status = 'done';
+  acls1.closedAt = mid(6);
+  change(acls, mid(6), 'status', [{ field: 'status', from: 'active', to: 'achieved' }], 'Both courses done.');
+
+  const answers = new Map([
+    [exams, ['yes', 'yes', 'some', 'yes', 'yes', 'some', 'yes', 'yes', 'some', 'yes']],
+    [residency, ['some', 'no', 'some', 'yes', 'some', 'no', 'some', 'yes', 'yes', 'some']],
+    [report, ['yes', 'some', 'some', 'no', 'some', 'yes', 'some', 'no', 'no', 'no']],
+    [run, ['some', 'yes', 'no', 'some', 'yes', 'yes', 'no', 'some', 'yes', 'yes']],
+    [spanish, ['no', 'some', 'no', 'no']],
+    [acls, ['yes', 'yes', 'yes', 'some', 'yes', 'yes']],
+  ]);
+  const notes = new Map([
+    ['9:' + exams.id, 'Two mock papers done, weak on nephrology.'],
+    ['9:' + report.id, 'Registrar on leave, nothing moved.'],
+    ['8:' + run.id, '14 km, felt good.'],
+    ['3:' + spanish.id, 'No time with ward duties.'],
+  ]);
+  weeks.forEach((wk, i) => {
+    const items = [];
+    answers.forEach((list, g) => {
+      if (i < list.length) items.push({ goalId: g.id, progress: list[i], note: notes.get(i + ':' + g.id) || '', nextAction: null });
+    });
+    d.checkins.push({ id: newId(), weekKey: wk, startedAt: at(addDays(wk, 6), 5), completedAt: at(addDays(wk, 6), 6), items, focusGoalIds: [exams.id, residency.id, report.id] });
+  });
+
+  [exams, residency, report].forEach(g => { g.inFocus = true; });
+  d.updatedAt = at(addDays(weeks[9], 6), 6);
+  return d;
+}
+/* =============================== STORAGE =============================== */
+// The only section that touches localStorage (rule 6). Reads and writes go through a "backend" with
+// get, set, remove and keys, so memory mode, demo mode and the self-test run the same code on a plain map.
+
+function memoryBackend(limitChars) {
+  const m = new Map();
+  return {
+    kind: 'memory',
+    get(k) { return m.has(k) ? m.get(k) : null; },
+    set(k, v) {
+      const text = String(v);
+      if (limitChars) {
+        let used = 0;
+        m.forEach((val, key) => { if (key !== k) used += key.length + val.length; });
+        if (used + k.length + text.length > limitChars) {
+          const e = new Error('The storage space is full.');
+          e.name = 'QuotaExceededError';
+          throw e;
+        }
+      }
+      m.set(k, text);
+    },
+    remove(k) { m.delete(k); },
+    keys() { return Array.from(m.keys()); },
+  };
+}
+function localBackend(ls) {
+  return {
+    kind: 'local',
+    get(k) { return ls.getItem(k); },
+    set(k, v) { ls.setItem(k, v); },
+    remove(k) { ls.removeItem(k); },
+    keys() {
+      const out = [];
+      for (let i = 0; i < ls.length; i += 1) { const k = ls.key(i); if (k !== null) out.push(k); }
+      return out;
+    },
+  };
+}
+// Boot step 1. The first reference to localStorage sits inside try, because some browsers throw on access.
+function probeLocalStorage() {
+  try {
+    const ls = window.localStorage;
+    ls.setItem(KEYS.probe, '1');
+    ls.removeItem(KEYS.probe);
+    return { ok: true, backend: localBackend(ls) };
+  } catch (e) {
+    return { ok: false, reason: (e && e.name) || 'Error' };
+  }
+}
+// What a stored text says about the save counter: absent, unreadable (rev null), or a rev.
+function revOfText(raw) {
+  if (!isStr(raw)) return { exists: false, rev: null };
+  try {
+    const o = JSON.parse(raw);
+    return { exists: true, rev: isObj(o) && isInt(o.rev) ? o.rev : null };
+  } catch (e) {
+    return { exists: true, rev: null };
+  }
+}
+// Boot steps 2-4 as a pure function of the stored text (spec 7). Writes nothing.
+function interpretStored(raw, now) {
+  if (!isStr(raw)) return { status: 'empty' };
+  let obj;
+  try { obj = JSON.parse(raw); } catch (e) { return { status: 'unreadable', problems: ['The saved data is not valid JSON.'] }; }
+  if (!isObj(obj) || obj.app !== APP_ID) return { status: 'unreadable', problems: ['The saved data does not look like Compass data.'] };
+  if (isInt(obj.schemaVersion) && obj.schemaVersion > SCHEMA_VERSION) {
+    return { status: 'newer', problems: ['It uses data format ' + obj.schemaVersion + '; this version reads format ' + SCHEMA_VERSION + '.'] };
+  }
+  let doc;
+  try { doc = migrate(obj); } catch (e) { return { status: 'unreadable', problems: ['The saved data could not be upgraded: ' + e.message] }; }
+  const migrated = doc.schemaVersion !== obj.schemaVersion;
+  const problems = validate(doc);
+  if (!problems.length) return { status: 'ok', doc, migrated, repaired: false, problems: [] };
+  const fixed = repairDoc(doc, now);
+  const left = validate(fixed);
+  if (!left.length) return { status: 'ok', doc: fixed, migrated, repaired: true, problems };
+  return { status: 'unreadable', problems: left };
+}
+
+// One store per data source. The app uses one; the self-test builds its own on memory backends.
+function makeStore(backend, mode) {
+  const st = { backend, mode, memoryReason: '', loadedRev: null, locked: false };
+  const safe = fn => { try { return fn(); } catch (e) { return undefined; } };
+
+  // Never throws: a failed read looks like "no data", which a save then treats as a mismatch.
+  st.readRaw = () => { const v = safe(() => st.backend.get(KEYS.data)); return isStr(v) ? v : null; };
+  st.inSync = () => {
+    const s = revOfText(st.readRaw());
+    return st.loadedRev === null ? !s.exists : (s.exists && s.rev === st.loadedRev);
+  };
+  st.toMemory = (reason, dataText) => {
+    const mem = memoryBackend(0);
+    if (isStr(dataText)) mem.set(KEYS.data, dataText);
+    st.backend = mem;
+    st.mode = 'memory';
+    st.memoryReason = reason;
+  };
+
+  /* Safety copies: up to SAFETY_MAX raw copies, newest last. Best effort (v1.1 fix 8). */
+  st.safetyCopies = () => {
+    const raw = safe(() => st.backend.get(KEYS.safety));
+    const arr = isStr(raw) ? safe(() => JSON.parse(raw)) : null;
+    return Array.isArray(arr) ? arr.filter(x => isObj(x) && isStr(x.raw) && isISO(x.at)) : [];
+  };
+  st.trimSafety = keep => {
+    const list = keep > 0 ? st.safetyCopies().slice(-keep) : [];
+    const done = safe(() => {
+      if (list.length) st.backend.set(KEYS.safety, JSON.stringify(list));
+      else st.backend.remove(KEYS.safety);
+      return true;
+    });
+    if (!done) safe(() => st.backend.remove(KEYS.safety));
+  };
+  st.takeSafetyCopy = (raw, reason, now) => {
+    if (!isStr(raw)) return false;
+    let list = st.safetyCopies().concat([{ at: isoNow(now), reason: reason || '', raw }]).slice(-SAFETY_MAX);
+    while (list.length) {
+      const text = JSON.stringify(list);
+      if (safe(() => { st.backend.set(KEYS.safety, text); return true; })) return true;
+      list = list.slice(1);                                // drop the oldest and try again
+    }
+    safe(() => st.backend.remove(KEYS.safety));
+    return false;
+  };
+
+  // Main save. Refuses on any mismatch with the stored save counter (another tab saved, or the data
+  // is gone), then writes rev + 1. If the write fails, safety copies are cleared and it tries again;
+  // if it still fails, the app carries on in memory mode with this data, so it can still be exported.
+  st.save = doc => {
+    if (st.locked) return { ok: false, reason: 'locked' };
+    if (!st.inSync()) return { ok: false, reason: 'conflict' };
+    const next = Object.assign({}, doc, { rev: Math.max(isInt(doc.rev) ? doc.rev : 0, st.loadedRev || 0) + 1 });
+    const text = JSON.stringify(next);
+    let err = null;
+    try { st.backend.set(KEYS.data, text); } catch (e1) {
+      st.trimSafety(0);
+      try { st.backend.set(KEYS.data, text); } catch (e2) { err = e2; }
+    }
+    if (err) st.toMemory('the last save failed (' + (err.name || 'error') + '), most likely because storage is full or blocked.', text);
+    st.loadedRev = next.rev;
+    return { ok: true, doc: next };
+  };
+
+  // Replaces all data (import, restore, start fresh). Whatever is stored is copied first, the new data
+  // gets a save counter above both, and if the write fails the stored data stays exactly as it was.
+  st.replaceAll = (doc, now, reason) => {
+    const raw = st.readRaw();
+    if (!st.locked && !st.inSync()) return { ok: false, reason: 'conflict' };
+    const copied = raw === null ? true : st.takeSafetyCopy(raw, reason, now);
+    const next = Object.assign({}, doc, { rev: Math.max(isInt(doc.rev) ? doc.rev : 0, st.loadedRev || 0, revOfText(raw).rev || 0) + 1 });
+    const text = JSON.stringify(next);
+    try { st.backend.set(KEYS.data, text); } catch (e1) {
+      st.trimSafety(1);
+      try { st.backend.set(KEYS.data, text); } catch (e2) { return { ok: false, reason: 'full' }; }
+    }
+    st.loadedRev = next.rev;
+    st.locked = false;
+    st.removeAllDrafts();
+    return { ok: true, doc: next, safetyCopied: copied };
+  };
+
+  st.eraseAll = () => {
+    const keys = safe(() => st.backend.keys()) || [];
+    let failed = 0;
+    keys.filter(k => k.indexOf(KEY_PREFIX) === 0).forEach(k => { if (!safe(() => { st.backend.remove(k); return true; })) failed += 1; });
+    st.loadedRev = null;
+    st.locked = false;
+    return failed === 0;
+  };
+
+  /* Editor drafts (spec 7). Best effort: a failed draft write never stops the app. */
+  st.draftKey = goalId => KEYS.draftPrefix + (goalId || 'new');
+  st.draftKeys = () => (safe(() => st.backend.keys()) || []).filter(k => k.indexOf(KEYS.draftPrefix) === 0);
+  st.getDraft = goalId => {
+    const o = safe(() => JSON.parse(st.backend.get(st.draftKey(goalId))));
+    return isObj(o) && isISO(o.savedAt) && isObj(o.fields) ? o : null;
+  };
+  st.setDraft = (goalId, fields, now) => !!safe(() => { st.backend.set(st.draftKey(goalId), JSON.stringify({ savedAt: isoNow(now), fields })); return true; });
+  st.removeDraft = goalId => { safe(() => st.backend.remove(st.draftKey(goalId))); };
+  st.removeAllDrafts = () => { st.draftKeys().forEach(k => { safe(() => st.backend.remove(k)); }); };
+  // Start-up cleanup: drafts older than DRAFT_MAX_DAYS, unreadable ones, and ones for goals that are gone.
+  st.cleanupDrafts = (doc, now) => {
+    const cutoff = now.getTime() - DRAFT_MAX_DAYS * DAY_MS;
+    st.draftKeys().forEach(k => {
+      const goalId = k.slice(KEYS.draftPrefix.length);
+      const o = safe(() => JSON.parse(st.backend.get(k)));
+      const stale = !isObj(o) || !isISO(o.savedAt) || Date.parse(o.savedAt) < cutoff;
+      const gone = goalId !== 'new' && !(doc && goalById(doc, goalId));
+      if (stale || gone) safe(() => st.backend.remove(k));
+    });
+  };
+
+  st.usage = () => {
+    const len = k => { const v = safe(() => st.backend.get(k)); return isStr(v) ? v.length : 0; };
+    return { dataChars: len(KEYS.data), safetyChars: len(KEYS.safety), safetyCount: st.safetyCopies().length, draftCount: st.draftKeys().length };
+  };
+
+  return st;
+}
+
+/* Backups (spec 7). Pure: these only build and check text. */
+function backupFileName(now) { return 'compass-backup-' + todayLocal(now) + '.json'; }
+function exportText(doc, now) {
+  return JSON.stringify(Object.assign({}, doc, { exportedAt: isoNow(now), appVersion: APP_VERSION }), null, 2);
+}
+// Checks a backup before anything changes: size, JSON, app, version, upgrade, then every rule. No repairs.
+function parseBackupText(text) {
+  if (!isStr(text) || text.trim() === '') fail('That backup is empty.');
+  if (utf8Bytes(text) > IMPORT_MAX_BYTES) fail('That file is too large to be a Compass backup.');
+  let obj = null;
+  try { obj = JSON.parse(text); } catch (e) { fail('That is not a Compass backup: it is not valid JSON.'); }
+  if (!isObj(obj) || obj.app !== APP_ID) fail('That is not a Compass backup.');
+  if (isInt(obj.schemaVersion) && obj.schemaVersion > SCHEMA_VERSION) fail('This backup comes from a newer version of Compass. Update the app, then import it.');
+  const bare = Object.assign({}, obj);
+  delete bare.exportedAt;
+  delete bare.appVersion;
+  let doc = null;
+  try { doc = migrate(bare); } catch (e) { fail('This backup could not be upgraded to this version of Compass.'); }
+  const problems = validate(doc);
+  if (problems.length) {
+    fail('This backup has problems, so nothing was imported. ' + problems.slice(0, 3).join(' ') + (problems.length > 3 ? ' (' + (problems.length - 3) + ' more)' : ''));
+  }
+  return doc;
+}
+function docSummary(doc) {
+  const count = s => doc.goals.filter(g => g.status === s).length;
+  return {
+    goals: doc.goals.length, active: count('active'), parked: count('parked'), achieved: count('achieved'), dropped: count('dropped'),
+    checkins: doc.checkins.filter(c => c.completedAt !== null).length,
+    drafts: doc.checkins.filter(c => c.completedAt === null).length,
+    changes: doc.changes.length, updatedAt: doc.updatedAt,
+  };
+}
+
+/* =============================== UI =============================== */
+// Screens are built with el(); text always goes in as text nodes, never as HTML (rule 7). Each screen draws
+// from a context (data, store, time) passed in, so the self-test can draw every screen with demo data.
+const APP = {
+  doc: null,            // the data this page works on (null while saved data is unreadable)
+  store: null,          // from makeStore()
+  boot: null,           // what loading found: { status, problems, migrated, repaired }
+  demo: false,
+  conflict: false,      // stored data changed elsewhere: saving pauses until reload
+  repairSeen: false,
+  persist: 'unknown',   // granted | not granted | unsupported | unknown
+  persistAsked: false,
+  depth: 0,             // in-app history entries behind this one, for goBack()
+  depthKnown: false,
+  routeName: '',        // the screen on display
+  scroll: {},           // remembered scroll positions (the board)
+  naDraft: {},          // next actions typed but not saved yet, by goal id
+  showMinor: false,     // history shows minor edits
+  pendingFocus: null,   // element ids to focus after the next draw; the first one available wins
+  selftest: null,       // results of the last self-test run
+  lastError: '',
+};
+
+function el(tag, attrs, children) {
+  const node = document.createElement(tag);
+  if (attrs) {
+    Object.keys(attrs).forEach(k => {
+      const v = attrs[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k.slice(0, 2) === 'on') { if (typeof v === 'function') node.addEventListener(k.slice(2), v); return; }
+      if (k === 'class') node.className = v;
+      else node.setAttribute(k, v === true ? '' : String(v));
+    });
+  }
+  const list = Array.isArray(children) ? children : (children === null || children === undefined ? [] : [children]);
+  list.forEach(c => {
+    if (c === null || c === undefined || c === false) return;
+    node.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
+  });
+  return node;
+}
+
+let toastTimer = 0;
+function ensureToast() {
+  let t = document.getElementById('toast');
+  if (!t) { t = el('div', { id: 'toast', class: 'toast', role: 'status', 'aria-live': 'polite' }); document.body.appendChild(t); }
+  return t;
+}
+function toast(msg) {
+  const t = ensureToast();
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 4000);
+}
+function showError(e) {
+  if (e instanceof UserError) { toast(e.message); return; }
+  console.error(e);
+  APP.lastError = String((e && (e.stack || e.message)) || e);
+  toast('Something went wrong, so nothing was saved. Diagnostics shows the details.');
+}
+
+// Download via a temporary link; the object URL is revoked after 10 seconds, not at once (spec 7).
+function downloadText(filename, text, type) {
+  try {
+    const url = URL.createObjectURL(new Blob([text], { type: type || 'application/json' }));
+    const a = el('a', { href: url, download: filename, style: 'display:none' });
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 10000);
+  } catch (e) {
+    showError(e);
+  }
+}
+// Copies text; if the clipboard is unavailable, shows it selected in a read-only box to copy by hand.
+function copyText(text, host) {
+  const showBox = () => {
+    const box = el('textarea', { readonly: true, 'aria-label': 'Text to copy' });
+    box.value = text;
+    host.textContent = '';
+    host.appendChild(el('p', { class: 'small' }, 'Copying did not work here, so the text is selected below. Copy it by hand.'));
+    host.appendChild(box);
+    box.focus();
+    box.select();
+  };
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(text).then(() => toast('Copied.'), showBox);
+      return;
+    }
+  } catch (e) { /* fall back to the box */ }
+  showBox();
+}
+
+// Requested once per session after a save, and only reported in Diagnostics, never relied on.
+function requestPersistence() {
+  if (APP.persistAsked) return;
+  APP.persistAsked = true;
+  try {
+    const sm = navigator.storage;
+    if (!sm || typeof sm.persist !== 'function' || typeof sm.persisted !== 'function') { APP.persist = 'unsupported'; return; }
+    sm.persisted().then(already => (already ? true : sm.persist())).then(ok => { APP.persist = ok ? 'granted' : 'not granted'; }).catch(() => { APP.persist = 'unknown'; });
+  } catch (e) {
+    APP.persist = 'unknown';
+  }
+}
+function checkPersistence() {
+  try {
+    const sm = navigator.storage;
+    if (!sm || typeof sm.persisted !== 'function') { APP.persist = 'unsupported'; return; }
+    sm.persisted().then(ok => {
+      APP.persist = ok ? 'granted' : 'not granted';
+      if (currentRoute().name === 'diagnostics') render();
+    }).catch(() => { /* leave as unknown */ });
+  } catch (e) { /* leave as unknown */ }
+}
+
+// Rule 5: the one way to change data. quiet: true saves without redrawing the page, for typing
+// screens such as check-in steps (v1.1 fix 5). Returns the action's result, or null if nothing was saved.
+function commit(name, payload, opts) {
+  const quiet = !!(opts && opts.quiet);
+  if (!APP.doc || !APP.store || APP.store.locked) { toast('Saving is paused because the saved data could not be read. See Diagnostics.'); return null; }
+  if (APP.conflict) { toast('Your data changed in another tab or window. Reload before making changes.'); return null; }
+  let out;
+  try { out = runAction(APP.doc, name, payload, new Date()); } catch (e) { showError(e); return null; }
+  if (!out.changed) return out.result;
+  const saved = APP.store.save(out.doc);
+  if (!saved.ok) {
+    if (saved.reason === 'conflict') APP.conflict = true;
+    renderBanners();
+    toast(saved.reason === 'conflict' ? 'Your data changed in another tab or window, so this was not saved. Reload to see the latest.' : 'This could not be saved.');
+    return null;
+  }
+  APP.doc = saved.doc;
+  if (APP.store.mode === 'local') requestPersistence();
+  if (quiet) renderBanners(); else render();
+  return out.result;
+}
+
+// Boot steps 2-4 applied to the app (spec 7). Upgrades and repairs happen only after a safety copy,
+// and data that cannot be read, or that a newer version saved, is locked against writes.
+function loadData(now) {
+  const st = APP.store;
+  const raw = st.readRaw();
+  const r = interpretStored(raw, now);
+  APP.conflict = false;
+  APP.boot = { status: r.status, problems: r.problems || [], migrated: !!r.migrated, repaired: !!r.repaired };
+  if (r.status === 'empty') { st.locked = false; st.loadedRev = null; APP.doc = defaultDoc(now); return; }
+  if (r.status !== 'ok') { st.locked = true; st.loadedRev = revOfText(raw).rev; APP.doc = null; return; }
+  st.locked = false;
+  st.loadedRev = revOfText(raw).rev;
+  APP.doc = r.doc;
+  if (r.migrated || r.repaired) {
+    st.takeSafetyCopy(raw, r.migrated ? 'before upgrading the data format' : 'before repairing saved data', now);
+    const saved = st.save(r.doc);
+    if (saved.ok) APP.doc = saved.doc;
+    else if (saved.reason === 'conflict') APP.conflict = true;
+  }
+}
+
+// Another tab saved, or this page became visible again (spec 7; v1.1 fix 4). Pages with text fields are
+// never redrawn: if the data changed underneath one, saving pauses and a Reload banner appears instead.
+function syncFromStorage() {
+  if (!APP.store || APP.store.mode !== 'local') return;   // demo and memory mode have no other writers
+  if (APP.store.inSync()) { if (!isFormRoute()) render(); return; }
+  if (isFormRoute()) { APP.conflict = true; renderBanners(); return; }
+  loadData(new Date());
+  render();
+}
+
+/* Pop-up dialogs (rule 8): buttons only, never text fields. One at a time; closed by Cancel, Escape,
+   a tap outside, or a change of page. */
+let dialogState = null;
+function openDialog(opts) {
+  closeDialog();
+  const returnFocus = document.activeElement;
+  const buttons = (opts.buttons || [{ label: 'Close' }]).map(b => el('button', {
+    class: 'btn' + (b.kind ? ' ' + b.kind : ''), type: 'button',
+    onclick: () => { closeDialog(); if (b.run) b.run(); },
+  }, b.label));
+  const box = el('div', { class: 'dialog', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'dialog-title' }, [
+    el('h2', { id: 'dialog-title' }, opts.title),
+    opts.text ? el('p', null, opts.text) : null,
+  ].concat(opts.nodes || [], [el('div', { class: 'actions' }, buttons)]));
+  const backdrop = el('div', { class: 'dialog-backdrop', onclick: e => { if (e.target === backdrop) closeDialog(); } }, box);
+  const onKey = e => {
+    if (e.key === 'Escape') { e.preventDefault(); closeDialog(); return; }
+    if (e.key !== 'Tab') return;
+    const items = Array.from(box.querySelectorAll('button:not([disabled]), a[href]'));
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(backdrop);
+  document.body.classList.add('dialog-open');
+  dialogState = { backdrop, onKey, returnFocus };
+  const firstButton = box.querySelector('button');
+  if (firstButton) firstButton.focus();
+}
+function closeDialog() {
+  if (!dialogState) return;
+  const s = dialogState;
+  dialogState = null;
+  document.removeEventListener('keydown', s.onKey);
+  s.backdrop.remove();
+  document.body.classList.remove('dialog-open');
+  if (s.returnFocus && document.body.contains(s.returnFocus) && typeof s.returnFocus.focus === 'function') {
+    try { s.returnFocus.focus({ preventScroll: true }); } catch (e) { /* nothing to return to */ }
+  }
+}
+
+/* Labels and formatting */
+const STATUS_LABEL = { active: 'Active', parked: 'Parked', achieved: 'Achieved', dropped: 'Dropped' };
+const PROGRESS_LABEL = { yes: 'Yes', some: 'A bit', no: 'No' };
+const KIND_LABEL = {
+  created: 'Created', edited: 'Edited', status: 'Status changed', 'milestone-added': 'Milestone added',
+  'milestone-done': 'Milestone done', 'milestone-edited': 'Milestone edited', 'milestone-replaced': 'Milestone replaced',
+};
+const FIELD_LABELS = {
+  title: 'Title', why: 'Why it matters', doneLooksLike: 'Done looks like', targetMonth: 'Target', status: 'Status',
+  revisitOn: 'Revisit date', milestone: 'Milestone', milestoneDue: 'Milestone due',
+};
+const CELL = { yes: ['●', 'yes'], some: ['◐', 'a bit'], no: ['○', 'no'], excluded: ['·', 'not in that check-in'], none: ['–', 'no check-in'] };
+const MONTH_NAMES = Array.from({ length: 12 }, (x, i) => new Date(Date.UTC(2000, i, 1)).toLocaleDateString(undefined, { month: 'long', timeZone: 'UTC' }));
+const WEEKDAYS = Array.from({ length: 7 }, (x, i) => new Date(Date.UTC(2023, 0, 1 + i)).toLocaleDateString(undefined, { weekday: 'long', timeZone: 'UTC' }));   // 1 Jan 2023 was a Sunday
+
+function fmtStamp(iso) { return isISO(iso) ? new Date(iso).toLocaleString() : ''; }
+// A calendar date, leaving out the year when it is this year.
+function fmtDay(s, today) { return fmtYMD(s, isStr(today) && s.slice(0, 4) === today.slice(0, 4) ? { year: undefined } : null); }
+// The local calendar date of a timestamp.
+function fmtWhen(iso) { return isISO(iso) ? fmtYMD(todayLocal(new Date(iso))) : ''; }
+function monthsBetween(fromYM, toYM) {
+  return (Number(toYM.slice(0, 4)) - Number(fromYM.slice(0, 4))) * 12 + (Number(toYM.slice(5, 7)) - Number(fromYM.slice(5, 7)));
+}
+function targetText(targetMonth, today) {
+  if (!isYM(targetMonth)) return '';
+  const n = monthsBetween(monthOf(today), targetMonth);
+  return fmtYM(targetMonth) + ' · ' + (n < 0 ? 'overdue' : n === 0 ? 'this month' : 'in ' + n + (n === 1 ? ' month' : ' months'));
+}
+function milestoneText(m, today) {
+  if (!m.dueDate) return m.text;
+  const n = diffDays(today, m.dueDate);
+  return m.text + ' · ' + (n < 0 ? 'overdue' : n === 0 ? 'due today' : 'due ' + fmtDay(m.dueDate, today));
+}
+function statusLabel(g, today) {
+  if (g.status === 'parked') return g.revisitOn ? 'Parked · revisit ' + fmtDay(g.revisitOn, today) : 'Parked';
+  if (g.status === 'achieved' || g.status === 'dropped') return STATUS_LABEL[g.status] + (g.closedAt ? ' · ' + fmtWhen(g.closedAt) : '');
+  return 'Active';
+}
+function weekKeysEnding(lastWeek, n) {
+  const out = [];
+  for (let i = n - 1; i >= 0; i -= 1) out.push(addDays(lastWeek, -7 * i));
+  return out;
+}
+
+/* Small builders */
+function card(title, children) {
+  return el('section', { class: 'card' }, [el('h2', null, title)].concat(Array.isArray(children) ? children : [children]));
+}
+function field(labelText, control, hint) {
+  return el('div', { class: 'field' }, [el('label', { for: control.id }, labelText), control, hint ? el('p', { class: 'hint' }, hint) : null]);
+}
+function sectionTitle(text, count) {
+  return el('h2', { class: 'section' }, [text + ' ', el('span', { class: 'count' }, '(' + count + ')')]);
+}
+function kvList(rows) {
+  return el('dl', { class: 'kv' }, rows.flatMap(r => [el('dt', null, r[0]), el('dd', { class: 'multiline' }, r[1])]));
+}
+
+// One banner at a time (spec 6), most important first. Saving problems show on every screen;
+// revisit reminders show on the board. Backup and install banners arrive in Phase 4.
+function topBanner(route) {
+  if (APP.store && APP.store.mode === 'memory') {
+    return { kind: 'danger', text: 'Not saving: ' + APP.store.memoryReason + ' Anything you change is lost when you close this page.' };
+  }
+  if (APP.conflict) return { kind: 'warn', text: 'Your data changed in another tab or window.', label: 'Reload', run: () => location.reload() };
+  if (APP.boot && APP.boot.repaired && !APP.repairSeen) {
+    return { kind: 'info', text: 'Some saved data was repaired when the app started. A copy of the original is under Safety copies in Diagnostics.', label: 'OK', run: () => { APP.repairSeen = true; renderBanners(); } };
+  }
+  if (route.name === 'board' && APP.doc) {
+    const due = revisitsDue(APP.doc, new Date());
+    if (due.length === 1) return { kind: 'info', text: '"' + due[0].title + '" is due for a revisit.', label: 'Review', run: () => navigate('/goal/' + encodeURIComponent(due[0].id)) };
+    if (due.length > 1) return { kind: 'info', text: due.length + ' parked goals are due for a revisit.', label: 'Review', run: () => navigate('/shelf') };
+  }
+  return null;
+}
+function renderBanners() {
+  const slot = document.getElementById('banners');
+  if (!slot) return;
+  slot.textContent = '';
+  if (APP.demo) slot.appendChild(el('div', { class: 'banner info', role: 'status' }, 'Demo: nothing is saved. Open the app without ?demo=1 to use your own data.'));
+  const b = topBanner(currentRoute());
+  if (!b) return;
+  slot.appendChild(el('div', { class: 'banner ' + b.kind, role: b.kind === 'danger' ? 'alert' : 'status' }, [
+    el('div', null, b.text),
+    b.label ? el('button', { class: 'btn', type: 'button', onclick: b.run }, b.label) : null,
+  ]));
+}
+
+/* Top bar and tab bar. Screens outside the tabs get a Back button, because a Home Screen app has none. */
+function topbar(route) {
+  if (route.tab) {
+    return el('header', { class: 'topbar' }, [
+      el('p', { class: 'brand' }, 'Compass'),
+      el('span', { class: 'spacer' }),
+      el('a', { class: 'iconbtn', href: '#/settings', 'aria-label': 'Settings', title: 'Settings' }, '⚙'),
+    ]);
+  }
+  return el('header', { class: 'topbar' }, [
+    el('button', { class: 'backbtn', type: 'button', onclick: () => goBack(route.back) }, '‹ Back'),
+    el('span', { class: 'spacer' }),
+    el('p', { class: 'brand' }, 'Compass'),
+  ]);
+}
+function tabbar(route) {
+  const tab = (path, name, label) => el('a', { href: '#' + path, 'aria-current': route.tab === name ? 'page' : null }, label);
+  return el('nav', { class: 'tabbar', 'aria-label': 'Main' }, [tab('/', 'board', 'Board'), tab('/shelf', 'shelf', 'Shelf')]);
+}
+
+// Draws the current screen from scratch. Screens with text fields are never redrawn on their own
+// (callers check isFormRoute() first). Addresses that can't be shown redirect without adding history,
+// and a screen that fails to draw shows the error instead of a blank page.
+function render() {
+  const root = document.getElementById('app');
+  if (!root) return;
+  let route = currentRoute();
+  let notice = '';
+  if (!APP.doc && !route.noDoc) route = redirectTo('/settings/diagnostics');
+  else if (route.unknown) { notice = 'That page does not exist, so here is the board.'; route = redirectTo('/'); }
+  else if (route.goalId && !goalById(APP.doc, route.goalId)) { notice = 'That goal no longer exists.'; route = redirectTo('/'); }
+  const now = new Date();
+  const ctx = { doc: APP.doc, store: APP.store, now, today: todayLocal(now) };
+  document.body.classList.toggle('has-nav', route.nav);
+  root.textContent = '';
+  root.appendChild(topbar(route));
+  root.appendChild(el('div', { id: 'banners' }));
+  const page = el('main', { id: 'page' });
+  root.appendChild(page);
+  if (route.nav) root.appendChild(tabbar(route));
+  renderBanners();
+  try {
+    PAGES[route.name](page, route, ctx);
+  } catch (e) {
+    console.error(e);
+    APP.lastError = String((e && (e.stack || e.message)) || e);
+    page.textContent = '';
+    page.appendChild(el('h1', { tabindex: '-1' }, 'Something went wrong'));
+    page.appendChild(el('p', null, 'This screen could not be shown. Your saved data was not changed. Diagnostics, under Settings, has the details.'));
+    page.appendChild(el('div', { class: 'why' }, APP.lastError));
+  }
+  APP.routeName = route.name;
+  if (notice) toast(notice);
+  applyPendingFocus();
+}
+// Swaps the address without adding a history entry and returns the screen it now points to.
+function redirectTo(path) {
+  try { history.replaceState({ depth: APP.depth }, '', '#' + path); } catch (e) { /* the screen is still right */ }
+  closeDialog();
+  return routeFor(path);
+}
+function applyPendingFocus() {
+  const ids = APP.pendingFocus;
+  APP.pendingFocus = null;
+  if (!Array.isArray(ids)) return;
+  for (const id of ids) {
+    const t = document.getElementById(id);
+    if (t && !t.disabled) {
+      try { t.focus({ preventScroll: true }); } catch (e) { t.focus(); }
+      if (typeof t.scrollIntoView === 'function') t.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+  }
+}
+
+/* Screens. Each takes (page, route, ctx) and adds its content, starting with a focusable h1. */
+const PAGES = {};
+
+PAGES.board = (page, route, ctx) => {
+  const d = ctx.doc;
+  const active = activeGoals(d);
+  const shelved = d.goals.length - active.length;
+  const shelfLink = () => el('p', { class: 'small' }, el('a', { href: '#/shelf' }, shelved + (shelved === 1 ? ' goal' : ' goals') + ' on the shelf'));
+  page.appendChild(el('h1', { tabindex: '-1' }, 'Your goals'));
+  if (!active.length) {
+    page.appendChild(el('div', { class: 'card empty' }, [
+      el('p', null, d.goals.length ? 'No active goals right now.' : 'No goals yet. Start with one that matters to you this year.'),
+      el('a', { class: 'btn primary', href: '#/goal/new' }, 'Add a goal'),
+      d.goals.length ? null : el('p', { class: 'small muted' }, 'On an iPhone or iPad? Add Compass to your Home Screen first and add your goals there. Safari and the Home Screen app keep separate data.'),
+    ]));
+    if (shelved) page.appendChild(shelfLink());
+    return;
+  }
+  const full = active.length >= MAX_ACTIVE;
+  page.appendChild(el('div', { class: 'actions' }, [
+    full ? el('button', { class: 'btn primary', type: 'button', disabled: true }, 'Add a goal') : el('a', { class: 'btn primary', href: '#/goal/new' }, 'Add a goal'),
+    active.length > 1 ? el('a', { class: 'btn', href: '#/reorder' }, 'Reorder') : null,
+  ]));
+  if (full) page.appendChild(el('p', { class: 'small muted' }, MAX_ACTIVE + ' active goals is the limit. Park or close one to add another.'));
+  const showStrip = d.checkins.some(c => c.completedAt !== null);
+  const focus = active.filter(g => g.inFocus);
+  const rest = active.filter(g => !g.inFocus);
+  if (focus.length) {
+    page.appendChild(sectionTitle('In focus', focus.length));
+    focus.forEach(g => page.appendChild(goalCard(g, ctx, showStrip)));
+  }
+  if (rest.length) {
+    page.appendChild(sectionTitle(focus.length ? 'Other goals' : 'Goals', rest.length));
+    rest.forEach(g => page.appendChild(goalCard(g, ctx, showStrip)));
+  }
+  if (shelved) page.appendChild(shelfLink());
+};
+
+// One link per card, no buttons inside (spec 6). Overdue dates say so in words, not just in colour.
+function goalCard(g, ctx, showStrip) {
+  const today = ctx.today;
+  const ms = currentMilestone(g);
+  const kids = [
+    el('div', { class: 'gc-top' }, [
+      el('span', { class: 'gc-title' }, g.title),
+      isStalled(ctx.doc, g.id, ctx.now) ? el('span', { class: 'badge stall' }, 'Stalled') : null,
+    ]),
+    g.why ? el('p', { class: 'gc-why' }, g.why) : null,
+    g.targetMonth ? cardRow('Target', targetText(g.targetMonth, today), isMonthOverdue(g.targetMonth, today)) : null,
+    ms ? cardRow('Milestone', milestoneText(ms, today), isDateOverdue(ms.dueDate, today)) : cardRow('Milestone', 'Add a milestone', false, true),
+    g.nextAction ? cardRow('Next', g.nextAction, false) : null,
+  ];
+  if (showStrip) {
+    const weeks = weekKeysEnding(currentWeekKey(ctx.now, ctx.doc.settings.weekStartsOn), 6);
+    const states = weeks.map(w => cellState(ctx.doc, g.id, w));
+    kids.push(el('div', { class: 'strip', 'aria-hidden': 'true' }, states.map((s, i) => el('span', { class: 'cell ' + s, title: 'Week of ' + fmtDay(weeks[i], today) + ': ' + CELL[s][1] }, CELL[s][0]))));
+    kids.push(el('span', { class: 'sr' }, 'Last 6 weeks: ' + states.map(s => CELL[s][1]).join(', ') + '.'));
+  }
+  return el('a', { class: 'goal-card' + (g.inFocus ? ' infocus' : ''), href: '#/goal/' + encodeURIComponent(g.id) }, kids);
+}
+function cardRow(label, value, overdue, muted) {
+  return el('div', { class: 'gc-row' }, [
+    el('span', { class: 'label' }, label),
+    el('span', { class: 'val' + (overdue ? ' overdue' : '') + (muted ? ' muted' : '') }, value),
+  ]);
+}
+
+/* Reorder: one flat list of active goals with up and down buttons, no drag and drop (spec 6). */
+PAGES.reorder = (page, route, ctx) => {
+  const active = activeGoals(ctx.doc);
+  page.appendChild(el('h1', { tabindex: '-1' }, 'Reorder goals'));
+  page.appendChild(el('p', { class: 'sub' }, 'Higher goals come first on the board. Goals in focus always show above the rest.'));
+  if (active.length < 2) page.appendChild(el('p', null, 'You need at least two active goals to reorder.'));
+  else {
+    page.appendChild(el('ol', { class: 'reorder' }, active.map((g, i) => el('li', null, [
+      el('span', { class: 'name' }, g.title),
+      moveBtn(g, 'up', i === 0),
+      moveBtn(g, 'down', i === active.length - 1),
+    ]))));
+  }
+  page.appendChild(el('div', { class: 'actions' }, el('button', { class: 'btn primary', type: 'button', onclick: () => goBack('/') }, 'Done')));
+};
+// After a move, focus stays on the same goal's button, or its other arrow at the top or bottom.
+function moveBtn(g, dir, disabled) {
+  const id = 'move-' + dir + '-' + g.id;
+  const other = 'move-' + (dir === 'up' ? 'down' : 'up') + '-' + g.id;
+  return el('button', {
+    class: 'btn', type: 'button', id, disabled, 'aria-label': 'Move "' + g.title + '" ' + dir,
+    onclick: () => { APP.pendingFocus = [id, other]; commit('moveGoal', { goalId: g.id, direction: dir }); },
+  }, dir === 'up' ? '↑' : '↓');
+}
+/* Goal page (spec 6): fields, status, focus, milestone, next action, weekly notes, history, actions. */
+PAGES.goal = (page, route, ctx) => {
+  const d = ctx.doc;
+  const g = goalById(d, route.goalId);
+  const today = ctx.today;
+  const base = goalPath(g.id);
+  const closed = g.status === 'achieved' || g.status === 'dropped';
+  const stalled = g.status === 'active' && isStalled(d, g.id, ctx.now);
+  page.appendChild(el('h1', { tabindex: '-1' }, g.title));
+  page.appendChild(el('div', null, [
+    el('span', { class: 'chip ' + g.status }, statusLabel(g, today)),
+    stalled ? ' ' : null,
+    stalled ? el('span', { class: 'badge stall' }, 'Stalled') : null,
+  ]));
+  if (g.status === 'active') {
+    page.appendChild(el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'button', onclick: () => toggleFocus(g.id) }, g.inFocus ? 'Remove from focus' : 'Add to focus')));
+  }
+  page.appendChild(card('About this goal', [
+    kvList([
+      ['Why it matters', g.why || '—'],
+      ['Done looks like', g.doneLooksLike || '—'],
+      ['Target', g.targetMonth ? targetText(g.targetMonth, today) : '—'],
+    ]),
+    el('div', { class: 'actions' }, el('a', { class: 'btn', href: '#' + base + '/edit' }, 'Edit goal')),
+  ]));
+  page.appendChild(milestoneCard(g, base, today, closed));
+  if (!closed) page.appendChild(nextActionCard(g));
+  const notes = answersFor(d, g.id, null).filter(a => a.note);
+  if (notes.length) {
+    page.appendChild(card('Weekly notes', el('ul', { class: 'plain' }, notes.map(a => el('li', null, [
+      el('div', { class: 'small muted' }, 'Week of ' + fmtDay(a.weekKey, today) + ' · ' + PROGRESS_LABEL[a.progress]),
+      el('div', { class: 'multiline' }, a.note),
+    ])))));
+  }
+  page.appendChild(historyCard(d, g));
+  page.appendChild(card('Status', [
+    el('div', { class: 'actions' }, statusActions(g, base)),
+    el('div', { class: 'actions' }, el('button', { class: 'btn danger', type: 'button', onclick: () => confirmDelete(g.id, g.title) }, 'Delete permanently')),
+  ]));
+};
+
+function milestoneCard(g, base, today, closed) {
+  const ms = currentMilestone(g);
+  const kids = [];
+  if (ms) {
+    const late = isDateOverdue(ms.dueDate, today);
+    kids.push(el('p', { class: 'multiline' }, ms.text));
+    if (ms.dueDate) kids.push(el('p', { class: 'small' + (late ? ' overdue' : ' muted') }, 'Due ' + fmtDay(ms.dueDate, today) + (late ? ' · overdue' : '')));
+    kids.push(el('div', { class: 'actions' }, [
+      el('a', { class: 'btn primary', href: '#' + base + '/milestone/done' }, 'Mark done'),
+      el('a', { class: 'btn', href: '#' + base + '/milestone/edit' }, 'Edit'),
+      el('a', { class: 'btn', href: '#' + base + '/milestone/replace' }, 'Replace'),
+    ]));
+  } else if (closed) {
+    kids.push(el('p', { class: 'muted' }, 'No current milestone.'));
+  } else {
+    kids.push(el('p', { class: 'muted' }, 'No current milestone. Make it the next chunk of this goal, something you can finish in 4 to 12 weeks.'));
+    kids.push(el('div', { class: 'actions' }, el('a', { class: 'btn primary', href: '#' + base + '/milestone/add' }, 'Add a milestone')));
+  }
+  const past = g.milestones.filter(m => m.status !== 'current').reverse();
+  if (past.length) {
+    kids.push(el('p', { class: 'small muted' }, 'Earlier milestones'));
+    kids.push(el('ul', { class: 'plain' }, past.map(m => el('li', null, [
+      el('div', { class: 'multiline' }, m.text),
+      el('div', { class: 'small muted' }, (m.status === 'done' ? 'Done' : 'Dropped') + (m.closedAt ? ' ' + fmtWhen(m.closedAt) : '')),
+    ]))));
+  }
+  return card('Milestone', kids);
+}
+
+// Inline save (spec 6). What you type is kept in APP.naDraft, so a redraw never loses it.
+function nextActionCard(g) {
+  const typed = APP.naDraft[g.id];
+  const input = el('input', { type: 'text', id: 'f-next', maxlength: String(LIMITS.nextAction), autocomplete: 'off', enterkeyhint: 'done', 'aria-label': 'Next action' });
+  input.value = typed !== undefined ? typed : g.nextAction;
+  const save = el('button', { class: 'btn primary', type: 'submit' }, 'Save');
+  const refresh = () => { save.disabled = cleanLine(input.value) === cleanLine(g.nextAction); };
+  input.addEventListener('input', () => { APP.naDraft[g.id] = input.value; refresh(); });
+  refresh();
+  const form = el('form', {
+    class: 'inline-form', novalidate: true,
+    onsubmit: e => {
+      e.preventDefault();
+      if (save.disabled) return;
+      if (commit('setNextAction', { goalId: g.id, nextAction: input.value }, { quiet: true }) === null) return;
+      delete APP.naDraft[g.id];
+      toast('Next action saved.');
+      render();
+    },
+  }, [input, save]);
+  return card('Next action', [form, el('p', { class: 'hint' }, 'One concrete step you can take soon. It shows on the board.')]);
+}
+
+// Listed in the order it was written, newest first, never sorted by timestamp (spec 5.2).
+function historyCard(d, g) {
+  const all = d.changes.filter(c => c.goalId === g.id).reverse();
+  const minorCount = all.filter(c => c.minor).length;
+  const shown = APP.showMinor ? all : all.filter(c => !c.minor);
+  const kids = [shown.length ? el('ol', { class: 'timeline' }, shown.map(c => historyItem(c))) : el('p', { class: 'muted' }, 'No history yet.')];
+  if (minorCount) {
+    kids.push(el('button', { class: 'linkbtn', type: 'button', onclick: () => { APP.showMinor = !APP.showMinor; render(); } },
+      APP.showMinor ? 'Hide minor edits' : 'Show minor edits (' + minorCount + ')'));
+  }
+  return card('History', kids);
+}
+function historyItem(c) {
+  return el('li', null, [
+    el('div', { class: 'tl-meta' }, [fmtStamp(c.at), c.minor ? el('span', { class: 'tag' }, 'minor') : null]),
+    el('strong', null, KIND_LABEL[c.kind] || c.kind),
+    c.diffs.length ? el('ul', { class: 'tl-diffs' }, c.diffs.map(df => el('li', { class: 'multiline' }, diffText(c.kind, df)))) : null,
+    c.reason ? el('p', { class: 'tl-reason' }, 'Reason: ' + c.reason) : null,
+  ]);
+}
+function diffText(kind, df) {
+  const label = FIELD_LABELS[df.field] || df.field;
+  const show = v => fieldValueText(df.field, v);
+  if (df.from === null) return label + ': ' + show(df.to);
+  if (df.to === null) return label + ': ' + show(df.from) + (kind === 'milestone-done' ? ' (done)' : ' → removed');
+  return label + ': ' + show(df.from) + ' → ' + show(df.to);
+}
+function fieldValueText(fieldName, v) {
+  if (v === null || v === '') return '—';
+  if (fieldName === 'targetMonth') return fmtYM(v) || v;
+  if (fieldName === 'revisitOn' || fieldName === 'milestoneDue') return fmtYMD(v) || v;
+  if (fieldName === 'status') return STATUS_LABEL[v] || v;
+  return v;
+}
+function statusActions(g, base) {
+  const link = (action, label, primary) => el('a', { class: 'btn' + (primary ? ' primary' : ''), href: '#' + base + '/status/' + action }, label);
+  if (g.status === 'active') return [link('park', 'Park'), link('achieve', 'Mark achieved'), link('drop', 'Drop')];
+  if (g.status === 'parked') return [link('reactivate', 'Reactivate', true), link('repark', 'Change revisit date'), link('drop', 'Drop')];
+  return [link('reactivate', 'Reactivate')];
+}
+
+// Adds or removes focus. With three already in focus, a pop-up asks which one to swap out (spec 5.3).
+function toggleFocus(goalId) {
+  const g = goalById(APP.doc, goalId);
+  if (!g) return;
+  if (g.inFocus) { commit('setFocus', { goalId, on: false }); return; }
+  const focused = focusGoals(APP.doc);
+  if (focused.length < MAX_FOCUS) { commit('setFocus', { goalId, on: true }); return; }
+  openDialog({
+    title: 'Swap a focus goal',
+    text: MAX_FOCUS + ' goals are already in focus. Choose one to take out of focus:',
+    nodes: focused.map(f => el('button', {
+      class: 'btn choice', type: 'button',
+      onclick: () => { closeDialog(); commit('setFocus', { goalId, on: true, replaceGoalId: f.id }); },
+    }, f.title)),
+    buttons: [{ label: 'Cancel' }],
+  });
+}
+// After deleting, the goal's page is replaced in history, so Back skips it.
+function confirmDelete(goalId, title) {
+  openDialog({
+    title: 'Delete this goal for good?',
+    text: '"' + title + '" will be removed along with its history and check-in answers. This cannot be undone. To keep it out of the way instead, drop it.',
+    buttons: [
+      { label: 'Cancel' },
+      {
+        label: 'Delete', kind: 'danger',
+        run: () => {
+          if (commit('deleteGoal', { goalId }, { quiet: true }) === null) return;
+          if (APP.store) APP.store.removeDraft(goalId);
+          delete APP.naDraft[goalId];
+          toast('Goal deleted.');
+          replaceRoute('/');
+        },
+      },
+    ],
+  });
+}
+
+/* Goal editor (spec 6): title, why, done looks like, target month. A draft is saved on every keystroke,
+   and reopening offers Restore or Discard. Edits list what changed and take an optional reason. */
+let newGoalFormId = null;   // the id the next new goal gets; kept until it is saved, so a repeated Save adds nothing
+PAGES.goalNew = (page, route, ctx) => goalEditor(page, ctx, null);
+PAGES.goalEdit = (page, route, ctx) => goalEditor(page, ctx, goalById(ctx.doc, route.goalId));
+
+function toTargetMonth(f) {
+  if (!f.month && !f.year) return null;
+  if (f.month && f.year) return f.year + '-' + f.month;
+  return 'incomplete';                                     // refused on save with a clear message
+}
+// The logged fields that differ from the saved goal, after the same cleaning the save applies.
+function editorChanges(saved, f) {
+  const out = [];
+  if (cleanLine(f.title) !== cleanLine(saved.title)) out.push('title');
+  if (cleanText(f.why) !== cleanText(saved.why)) out.push('why');
+  if (cleanText(f.doneLooksLike) !== cleanText(saved.doneLooksLike)) out.push('doneLooksLike');
+  if (toTargetMonth(f) !== saved.targetMonth) out.push('targetMonth');
+  return out;
+}
+function draftHasContent(f) {
+  return [f.title, f.why, f.doneLooksLike].some(v => cleanText(v) !== '') || !!f.month || !!f.year;
+}
+function goalEditor(page, ctx, goal) {
+  const isNew = !goal;
+  const key = isNew ? null : goal.id;
+  const saved = isNew
+    ? { title: '', why: '', doneLooksLike: '', targetMonth: null }
+    : { title: goal.title, why: goal.why, doneLooksLike: goal.doneLooksLike, targetMonth: goal.targetMonth };
+  if (isNew && !newGoalFormId) newGoalFormId = newId();
+  const formGoalId = newGoalFormId;
+  const backPath = isNew ? '/' : goalPath(goal.id);
+  page.appendChild(el('h1', { tabindex: '-1' }, isNew ? 'New goal' : 'Edit goal'));
+  if (!isNew) page.appendChild(el('p', { class: 'sub' }, goal.title));
+
+  const title = el('input', { type: 'text', id: 'f-title', maxlength: String(LIMITS.title), autocomplete: 'off', enterkeyhint: 'next' });
+  const why = el('textarea', { id: 'f-why', class: 'short', maxlength: String(LIMITS.why) });
+  const done = el('textarea', { id: 'f-done', class: 'short', maxlength: String(LIMITS.doneLooksLike) });
+  const month = el('select', { id: 'f-month', 'aria-label': 'Target month' },
+    [el('option', { value: '' }, 'Month')].concat(MONTH_NAMES.map((n, i) => el('option', { value: pad2(i + 1) }, n))));
+  const year = el('select', { id: 'f-year', 'aria-label': 'Target year' }, [el('option', { value: '' }, 'Year')]);
+  const addYear = y => {
+    if (!y || Array.from(year.options).some(o => o.value === y)) return;
+    const after = Array.from(year.options).find(o => o.value && o.value > y);
+    year.insertBefore(el('option', { value: y }, y), after || null);
+  };
+  const firstYear = Number(ctx.today.slice(0, 4));
+  for (let y = firstYear; y <= firstYear + 15; y += 1) addYear(String(y));
+  const reason = el('textarea', { id: 'f-reason', class: 'short', maxlength: String(LIMITS.reason) });
+  const minor = el('input', { type: 'checkbox', id: 'f-minor' });
+
+  const setValues = f => {
+    title.value = isStr(f.title) ? f.title : '';
+    why.value = isStr(f.why) ? f.why : '';
+    done.value = isStr(f.doneLooksLike) ? f.doneLooksLike : '';
+    month.value = isStr(f.month) && /^(0[1-9]|1[0-2])$/.test(f.month) ? f.month : '';
+    const y = isStr(f.year) && /^\d{4}$/.test(f.year) ? f.year : '';
+    addYear(y);
+    year.value = y;
+    reason.value = isStr(f.reason) ? f.reason : '';
+  };
+  const readFields = () => ({ title: title.value, why: why.value, doneLooksLike: done.value, month: month.value, year: year.value, reason: reason.value });
+  setValues({
+    title: saved.title, why: saved.why, doneLooksLike: saved.doneLooksLike,
+    month: saved.targetMonth ? saved.targetMonth.slice(5, 7) : '', year: saved.targetMonth ? saved.targetMonth.slice(0, 4) : '', reason: '',
+  });
+
+  const changed = el('p', { class: 'small' });
+  const changeBox = el('div', { class: 'changebox' }, [
+    changed,
+    field('Reason for the change (optional)', reason, 'Kept in the history with this edit.'),
+    el('label', { class: 'check' }, [minor, 'Minor edit, hidden from history by default']),
+  ]);
+  const refreshBox = () => {
+    if (isNew) return;
+    const ch = editorChanges(saved, readFields());
+    changeBox.hidden = ch.length === 0;
+    changed.textContent = ch.length ? 'Changing: ' + ch.map(k => FIELD_LABELS[k]).join(', ') + '.' : '';
+  };
+  const onEdit = () => { if (ctx.store) ctx.store.setDraft(key, readFields(), new Date()); refreshBox(); };
+  [title, why, done, reason].forEach(x => x.addEventListener('input', onEdit));
+  [month, year].forEach(x => x.addEventListener('change', onEdit));
+
+  const draft = ctx.store ? ctx.store.getDraft(key) : null;
+  const differs = draft ? (isNew ? draftHasContent(draft.fields) : editorChanges(saved, draft.fields).length > 0 || cleanText(draft.fields.reason) !== '') : false;
+  if (draft && !differs) ctx.store.removeDraft(key);
+  if (differs) {
+    const notice = el('div', { class: 'notice', role: 'status' }, [
+      el('p', null, 'You have unsaved changes from ' + fmtStamp(draft.savedAt) + '.'),
+      el('div', { class: 'actions' }, [
+        el('button', { class: 'btn primary', type: 'button', onclick: () => { setValues(draft.fields); refreshBox(); notice.remove(); title.focus(); } }, 'Restore'),
+        el('button', { class: 'btn', type: 'button', onclick: () => { ctx.store.removeDraft(key); notice.remove(); } }, 'Discard'),
+      ]),
+    ]);
+    page.appendChild(notice);
+  }
+
+  const save = el('button', { class: 'btn primary', type: 'submit' }, isNew ? 'Add goal' : 'Save changes');
+  page.appendChild(el('form', {
+    novalidate: true,
+    onsubmit: e => {
+      e.preventDefault();
+      const f = readFields();
+      const payload = { title: f.title, why: f.why, doneLooksLike: f.doneLooksLike, targetMonth: toTargetMonth(f) };
+      const res = isNew
+        ? commit('addGoal', Object.assign({ id: formGoalId }, payload), { quiet: true })
+        : commit('editGoal', Object.assign({ goalId: goal.id, reason: f.reason, minor: minor.checked }, payload), { quiet: true });
+      if (res === null) return;
+      save.disabled = true;
+      if (ctx.store) ctx.store.removeDraft(key);
+      if (isNew) { newGoalFormId = null; toast('Goal added.'); }
+      else toast(editorChanges(saved, f).length ? 'Changes saved.' : 'Nothing had changed.');
+      goBack(backPath);
+    },
+  }, [
+    field('Title', title, 'Required. One line, up to ' + LIMITS.title + ' characters.'),
+    field('Why it matters', why, 'Optional.'),
+    field('Done looks like', done, 'Optional. What will be true when you get there?'),
+    el('fieldset', { class: 'field' }, [
+      el('legend', null, 'Target'),
+      el('div', { class: 'row2' }, [month, year]),
+      el('p', { class: 'hint' }, 'Optional. Pick both a month and a year, or neither.'),
+    ]),
+    isNew ? null : changeBox,
+    el('div', { class: 'actions' }, [save, el('button', { class: 'btn', type: 'button', onclick: () => goBack(backPath) }, 'Cancel')]),
+  ]));
+  refreshBox();
+}
+
+/* Status forms (spec 5.3): park, drop, achieve, reactivate, and change a parked goal's revisit date. */
+const STATUS_FORMS = {
+  park: { from: ['active'], title: 'Park this goal', intro: 'Parking sets it aside without giving up. It leaves focus and moves to the shelf.', reason: 'required', date: true, button: 'Park goal', done: 'Goal parked.' },
+  drop: { from: ['active', 'parked'], title: 'Drop this goal', intro: 'Dropping means it is no longer worth pursuing. You can reactivate it later.', reason: 'required', button: 'Drop goal', danger: true, done: 'Goal dropped.' },
+  achieve: { from: ['active'], title: 'Mark as achieved', intro: 'Well done. Its current milestone, if any, is marked done too.', reason: 'note', button: 'Mark achieved', done: 'Marked achieved.' },
+  reactivate: { from: ['parked', 'achieved', 'dropped'], title: 'Reactivate this goal', intro: 'It goes back on the board, at the end of the list.', reason: 'optional', button: 'Reactivate', done: 'Goal reactivated.' },
+  repark: { from: ['parked'], title: 'Change the revisit date', intro: 'The goal stays parked. Leave the date empty for no reminder.', reason: 'optional', date: true, button: 'Save date', done: 'Revisit date saved.' },
+};
+const STATUS_TARGET = { park: 'parked', drop: 'dropped', achieve: 'achieved', reactivate: 'active' };
+const REASON_LABEL = { required: 'Reason', optional: 'Reason (optional)', note: 'Note (optional)' };
+
+PAGES.goalStatus = (page, route, ctx) => {
+  const g = goalById(ctx.doc, route.goalId);
+  const cfg = STATUS_FORMS[route.action];
+  page.appendChild(el('h1', { tabindex: '-1' }, cfg.title));
+  page.appendChild(el('p', { class: 'sub' }, g.title));
+  if (!cfg.from.includes(g.status)) {
+    page.appendChild(el('p', null, 'This goal is ' + STATUS_LABEL[g.status].toLowerCase() + ' now, so this step no longer applies.'));
+    page.appendChild(el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'button', onclick: () => goBack(route.back) }, 'Back')));
+    return;
+  }
+  page.appendChild(el('p', null, cfg.intro));
+  let date = null;
+  if (cfg.date) {
+    date = el('input', { type: 'date', id: 'f-date', min: addDays(ctx.today, 1) });
+    date.value = route.action === 'repark' ? (g.revisitOn || '') : addDays(ctx.today, DEFAULT_REVISIT_DAYS);
+  }
+  const reason = el('textarea', { id: 'f-reason', class: 'short', maxlength: String(LIMITS.reason) });
+  const submit = el('button', { class: 'btn ' + (cfg.danger ? 'danger' : 'primary'), type: 'submit' }, cfg.button);
+  page.appendChild(el('form', {
+    novalidate: true,
+    onsubmit: e => {
+      e.preventDefault();
+      const p = { goalId: g.id, reason: reason.value };
+      const res = route.action === 'repark'
+        ? commit('keepParked', Object.assign(p, { revisitOn: date.value }), { quiet: true })
+        : commit('setStatus', Object.assign(p, { to: STATUS_TARGET[route.action], revisitOn: date ? date.value : null }), { quiet: true });
+      if (res === null) return;
+      submit.disabled = true;
+      toast(cfg.done);
+      goBack(route.back);
+    },
+  }, [
+    date ? field('Revisit on', date, 'Optional. From this date the board reminds you to look at it again.') : null,
+    field(REASON_LABEL[cfg.reason], reason, cfg.reason === 'required' ? 'Required. Future you will want to know why.' : ''),
+    el('div', { class: 'actions' }, [submit, el('button', { class: 'btn', type: 'button', onclick: () => goBack(route.back) }, 'Cancel')]),
+  ]));
+};
+
+/* Milestone forms (spec 5.3): add, mark done, edit, replace. Each form remembers the milestone it was
+   opened for, so a change made meanwhile is refused rather than applied to the wrong one. */
+const MILESTONE_FORMS = {
+  add: { title: 'Add a milestone', needs: 'none', button: 'Add milestone', done: 'Milestone added.' },
+  edit: { title: 'Edit the milestone', needs: 'current', button: 'Save changes', done: 'Milestone updated.' },
+  done: { title: 'Mark the milestone done', needs: 'current', button: 'Mark done', done: 'Milestone done.' },
+  replace: { title: 'Replace the milestone', needs: 'current', button: 'Replace milestone', done: 'Milestone replaced.' },
+};
+PAGES.goalMilestone = (page, route, ctx) => {
+  const g = goalById(ctx.doc, route.goalId);
+  const action = route.action;
+  const cfg = MILESTONE_FORMS[action];
+  const ms = currentMilestone(g);
+  const closed = g.status === 'achieved' || g.status === 'dropped';
+  page.appendChild(el('h1', { tabindex: '-1' }, cfg.title));
+  page.appendChild(el('p', { class: 'sub' }, g.title));
+  const problem = cfg.needs === 'current'
+    ? (ms ? '' : 'This goal has no current milestone now.')
+    : (closed ? 'Reactivate this goal before adding a milestone.' : ms ? 'This goal already has a current milestone. Mark it done or replace it.' : '');
+  if (problem) {
+    page.appendChild(el('p', null, problem));
+    page.appendChild(el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'button', onclick: () => goBack(route.back) }, 'Back')));
+    return;
+  }
+  if (ms && action !== 'edit') {
+    page.appendChild(el('div', { class: 'card' }, [el('p', { class: 'small muted' }, 'Current milestone'), el('p', { class: 'multiline' }, ms.text)]));
+  }
+  const newMilestoneId = newId();
+  const text = el('input', { type: 'text', id: 'f-text', maxlength: String(LIMITS.milestone), autocomplete: 'off' });
+  const due = el('input', { type: 'date', id: 'f-due' });
+  const reason = el('textarea', { id: 'f-reason', class: 'short', maxlength: String(LIMITS.reason) });
+  if (action === 'edit') { text.value = ms.text; due.value = ms.dueDate || ''; }
+  const submit = el('button', { class: 'btn primary', type: 'submit' }, cfg.button);
+  const fields = [];
+  if (action !== 'done') {
+    fields.push(field(action === 'replace' ? 'New milestone' : 'Milestone', text, 'Required. Something you can finish in 4 to 12 weeks.'));
+    fields.push(field('Due date', due, 'Optional.'));
+  }
+  fields.push(field(action === 'add' || action === 'done' ? 'Note (optional)' : 'Reason (optional)', reason, ''));
+  page.appendChild(el('form', {
+    novalidate: true,
+    onsubmit: e => {
+      e.preventDefault();
+      const base = { goalId: g.id, reason: reason.value };
+      let res;
+      if (action === 'add') res = commit('addMilestone', Object.assign(base, { id: newMilestoneId, text: text.value, dueDate: due.value }), { quiet: true });
+      else if (action === 'edit') res = commit('editMilestone', Object.assign(base, { milestoneId: ms.id, text: text.value, dueDate: due.value }), { quiet: true });
+      else if (action === 'done') res = commit('completeMilestone', Object.assign(base, { milestoneId: ms.id }), { quiet: true });
+      else res = commit('replaceMilestone', Object.assign(base, { milestoneId: ms.id, replacementId: newMilestoneId, text: text.value, dueDate: due.value }), { quiet: true });
+      if (res === null) return;
+      submit.disabled = true;
+      toast(cfg.done);
+      goBack(route.back);
+    },
+  }, fields.concat([el('div', { class: 'actions' }, [submit, el('button', { class: 'btn', type: 'button', onclick: () => goBack(route.back) }, 'Cancel')])])));
+};
+
+/* Shelf: parked goals by soonest revisit (no date last), then achieved and dropped, newest first. */
+PAGES.shelf = (page, route, ctx) => {
+  const d = ctx.doc;
+  page.appendChild(el('h1', { tabindex: '-1' }, 'Shelf'));
+  page.appendChild(el('p', { class: 'sub' }, 'Goals you parked, achieved or dropped. Open one to reactivate it or read its history.'));
+  const groups = shelfGroups(d);
+  const sections = [['Parked', groups.parked], ['Achieved', groups.achieved], ['Dropped', groups.dropped]].filter(s => s[1].length);
+  if (!sections.length) { page.appendChild(el('div', { class: 'card empty' }, el('p', null, 'Nothing on the shelf yet.'))); return; }
+  sections.forEach(([title, list]) => {
+    page.appendChild(sectionTitle(title, list.length));
+    page.appendChild(el('div', { class: 'card' }, list.map(g => shelfItem(d, g, ctx.today))));
+  });
+};
+function shelfGroups(d) {
+  const of = s => d.goals.filter(g => g.status === s);
+  const byRevisit = (a, b) => {
+    if (a.revisitOn && b.revisitOn) return a.revisitOn < b.revisitOn ? -1 : a.revisitOn > b.revisitOn ? 1 : 0;
+    return a.revisitOn ? -1 : b.revisitOn ? 1 : 0;
+  };
+  const newestClosed = (a, b) => ((a.closedAt || '') < (b.closedAt || '') ? 1 : (a.closedAt || '') > (b.closedAt || '') ? -1 : 0);
+  return { parked: of('parked').sort(byRevisit), achieved: of('achieved').sort(newestClosed), dropped: of('dropped').sort(newestClosed) };
+}
+function lastStatusChange(d, goalId) {
+  for (let i = d.changes.length - 1; i >= 0; i -= 1) {
+    if (d.changes[i].goalId === goalId && d.changes[i].kind === 'status') return d.changes[i];
+  }
+  return null;
+}
+function shelfItem(d, g, today) {
+  const c = lastStatusChange(d, g.id);
+  const meta = g.status === 'parked'
+    ? (g.revisitOn ? (g.revisitOn <= today ? 'Revisit due since ' : 'Revisit on ') + fmtDay(g.revisitOn, today) : 'No revisit date')
+    : STATUS_LABEL[g.status] + (g.closedAt ? ' ' + fmtWhen(g.closedAt) : '');
+  return el('a', { class: 'shelf-item', href: '#' + goalPath(g.id) }, [
+    el('div', { class: 't' }, g.title),
+    el('div', { class: 'm' }, meta),
+    c && c.reason ? el('div', { class: 'r' }, c.reason) : null,
+  ]);
+}
+
+/* Settings: first day of the week (locked after the first check-in), stall threshold, a simple backup. */
+PAGES.settings = (page, route, ctx) => {
+  const d = ctx.doc;
+  page.appendChild(el('h1', { tabindex: '-1' }, 'Settings'));
+  if (d) {
+    const locked = d.checkins.length > 0;
+    const week = el('select', { id: 's-week', disabled: locked }, WEEKDAYS.map((name, i) => el('option', { value: String(i) }, name)));
+    week.value = String(d.settings.weekStartsOn);
+    week.addEventListener('change', () => commit('updateSettings', { weekStartsOn: week.value }));
+    const stale = el('select', { id: 's-stale' }, [2, 3, 4, 5, 6].map(n => el('option', { value: String(n) }, n + ' check-ins in a row')));
+    stale.value = String(d.settings.staleAfter);
+    stale.addEventListener('change', () => commit('updateSettings', { staleAfter: stale.value }));
+    page.appendChild(card('Weekly check-in', [
+      field('First day of the week', week, locked ? 'Locked because you already have a check-in; changing it would misplace past weeks.' : 'Choose this before your first check-in. It locks after that.'),
+      field('Mark a goal stalled after "no" in', stale, 'Used for the Stalled badge and the check-in prompt.'),
+    ]));
+    const host = el('div');
+    page.appendChild(card('Backup', [
+      el('p', null, 'Your goals live only in this browser. Download a backup now and then and keep it somewhere private, not in your public GitHub repo.'),
+      el('p', { class: 'small muted' }, d.settings.lastExportAt ? 'Last backup: ' + fmtStamp(d.settings.lastExportAt) : 'No backup yet.'),
+      el('div', { class: 'actions' }, [
+        el('button', { class: 'btn primary', type: 'button', onclick: () => backupDownload() }, 'Download backup'),
+        el('button', { class: 'btn', type: 'button', onclick: () => backupCopy(host) }, 'Copy as text'),
+      ]),
+      host,
+      el('p', { class: 'small muted' }, 'Restoring from a backup arrives with the full backup screen in a later version.'),
+    ]));
+  }
+  page.appendChild(card('About', [
+    el('p', null, 'Compass ' + APP_VERSION),
+    el('div', { class: 'actions' }, el('a', { class: 'btn', href: '#/settings/diagnostics' }, 'Diagnostics')),
+  ]));
+};
+function backupDownload() {
+  if (!APP.doc) return;
+  const now = new Date();
+  downloadText(backupFileName(now), exportText(APP.doc, now));
+  commit('markExported', {});
+  toast('Backup downloaded. Check that the file arrived.');
+}
+function backupCopy(host) {
+  if (!APP.doc) return;
+  copyText(exportText(APP.doc, new Date()), host);
+  commit('markExported', {}, { quiet: true });
+}
+
+/* Diagnostics: version, storage, start-up, self-test, safety copies, last error. Works even when the
+   saved data could not be read, and offers that data as a download or copied text. */
+function statusText() {
+  const st = APP.store;
+  if (!st) return 'Not started';
+  if (st.mode === 'demo') return 'Demo: in memory only, nothing is saved';
+  if (st.mode === 'memory') return 'Not saving: ' + st.memoryReason;
+  return 'Saved in this browser, for this web address only';
+}
+function startupText() {
+  const b = APP.boot;
+  if (!b) return 'Not started';
+  if (b.status === 'ok') return b.migrated ? 'Loaded and upgraded to the current format' : b.repaired ? 'Loaded after safe repairs' : 'Loaded normally';
+  return { empty: 'First run: no saved data yet', demo: 'Demo data', newer: 'Saved by a newer version: left untouched', unreadable: 'Saved data could not be read: left untouched' }[b.status] || b.status;
+}
+function displayMode() {
+  try { if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) return 'Home Screen app'; } catch (e) { /* treat as a tab */ }
+  return 'Browser tab';
+}
+function kb(chars) { return chars > 0 ? Math.max(1, Math.round(chars / 1024)) + ' KB' : '0 KB'; }
+
+PAGES.diagnostics = page => {
+  page.appendChild(el('h1', { tabindex: '-1' }, 'Diagnostics'));
+
+  const b = APP.boot || {};
+  if (b.status === 'unreadable' || b.status === 'newer') {
+    const raw = APP.store ? APP.store.readRaw() : null;
+    const host = el('div');
+    page.appendChild(el('section', { class: 'card problem' }, [
+      el('h2', null, b.status === 'newer' ? 'Saved by a newer version' : 'Saved data could not be read'),
+      el('p', null, b.status === 'newer'
+        ? 'A newer version of Compass saved this data, so this version leaves it untouched. Keep a copy before doing anything else.'
+        : 'Nothing was changed or overwritten. Keep a copy of the saved data; restoring from a backup and starting fresh arrive with the recovery screen in a later phase.'),
+      (b.problems || []).length ? el('ul', { class: 'errors' }, b.problems.slice(0, 10).map(x => el('li', null, x))) : null,
+      raw !== null ? el('button', { class: 'btn primary', type: 'button', onclick: () => downloadText('compass-saved-data-' + todayLocal(new Date()) + '.txt', raw, 'text/plain') }, 'Download the saved data') : null,
+      raw !== null ? el('button', { class: 'btn', type: 'button', onclick: () => copyText(raw, host) }, 'Copy as text') : null,
+      host,
+    ]));
+  }
+
+  const st = APP.store;
+  const rows = [
+    ['App version', APP_VERSION],
+    ['Data format', String(SCHEMA_VERSION)],
+    ['Storage', statusText()],
+    ['Start-up', startupText()],
+    ['Persistent storage', APP.persist],
+    ['Running as', displayMode()],
+    ['Save counter', st && st.loadedRev !== null ? String(st.loadedRev) : 'Nothing saved yet'],
+  ];
+  if (APP.doc) {
+    const s = docSummary(APP.doc);
+    rows.push(['Last saved', st && st.loadedRev !== null ? fmtStamp(APP.doc.updatedAt) : 'Not yet']);
+    rows.push(['Goals', s.goals + ' (' + s.active + ' active, ' + s.parked + ' parked, ' + s.achieved + ' achieved, ' + s.dropped + ' dropped)']);
+    rows.push(['Check-ins', s.checkins + ' finished' + (s.drafts ? ', 1 unfinished' : '')]);
+    rows.push(['History entries', String(s.changes)]);
+  }
+  if (st) {
+    const u = st.usage();
+    rows.push(['Space used', 'data ' + kb(u.dataChars) + ', safety copies ' + kb(u.safetyChars) + ', editor drafts ' + u.draftCount]);
+  }
+  page.appendChild(el('section', { class: 'card' }, [
+    el('h2', null, 'Status'),
+    el('dl', { class: 'kv' }, rows.flatMap(r => [el('dt', null, r[0]), el('dd', null, r[1])])),
+  ]));
+
+  const results = APP.selftest;
+  const testCard = el('section', { class: 'card' }, [
+    el('h2', null, 'Self-test'),
+    el('p', { class: 'small muted' }, 'Checks dates, rules, actions, saving, backups and every screen on sample data held in memory. Your saved data is not read or changed.'),
+    el('button', { class: 'btn primary', type: 'button', onclick: () => { APP.selftest = runSelfTest(); render(); } }, results ? 'Run again' : 'Run self-test'),
+  ]);
+  if (results) {
+    const failed = results.filter(r => !r.pass).length;
+    testCard.appendChild(el('p', { class: 'result ' + (failed ? 'bad' : 'good'), role: 'status' },
+      failed ? failed + ' of ' + results.length + ' tests failed' : 'All ' + results.length + ' tests passed'));
+    const ordered = results.filter(r => !r.pass).concat(results.filter(r => r.pass));
+    testCard.appendChild(el('ol', { class: 'tests' }, ordered.map(r => el('li', { class: r.pass ? 'pass' : 'fail' }, [
+      el('span', { class: 'mark', 'aria-hidden': 'true' }, r.pass ? '✓' : '✗'),
+      el('span', { class: 'sr' }, r.pass ? 'Passed: ' : 'Failed: '),
+      r.name,
+      !r.pass && r.detail ? el('div', { class: 'why' }, r.detail) : null,
+    ]))));
+  }
+  page.appendChild(testCard);
+
+  const copies = st ? st.safetyCopies().slice().reverse() : [];
+  page.appendChild(el('section', { class: 'card' }, [
+    el('h2', null, 'Safety copies'),
+    el('p', { class: 'small muted' }, 'Taken automatically before upgrades, repairs and imports. The newest ' + SAFETY_MAX + ' are kept, in this browser only.'),
+    copies.length
+      ? el('ul', { class: 'plain' }, copies.map(c => el('li', null, [
+        el('div', null, fmtStamp(c.at) + (c.reason ? ': ' + c.reason : '')),
+        el('div', { class: 'small muted' }, kb(c.raw.length)),
+        el('button', { class: 'btn', type: 'button', onclick: () => downloadText('compass-safety-copy-' + todayLocal(new Date(c.at)) + '.json', c.raw) }, 'Download'),
+      ])))
+      : el('p', null, 'No safety copies yet.'),
+  ]));
+
+  if (APP.lastError) {
+    page.appendChild(el('section', { class: 'card problem' }, [el('h2', null, 'Last error'), el('div', { class: 'why' }, APP.lastError)]));
+  }
+};
+
+/* =============================== ROUTER =============================== */
+// Every screen is a hash route (rule 10). form: true marks screens with text fields, which are never
+// redrawn on their own (rule 9). nav: true shows the tab bar. back is where Back goes when nothing in the
+// app is behind the screen. noDoc screens still work when the saved data could not be read.
+const ROUTES = [
+  { name: 'board', pattern: /^\/$/, nav: true, tab: 'board' },
+  { name: 'reorder', pattern: /^\/reorder$/, back: () => '/' },
+  { name: 'goalNew', pattern: /^\/goal\/new$/, form: true, back: () => '/' },
+  { name: 'goalEdit', pattern: /^\/goal\/([^/]+)\/edit$/, form: true, goal: true, back: p => goalPath(p[0]) },
+  { name: 'goalStatus', pattern: /^\/goal\/([^/]+)\/status\/(park|drop|achieve|reactivate|repark)$/, form: true, goal: true, back: p => goalPath(p[0]) },
+  { name: 'goalMilestone', pattern: /^\/goal\/([^/]+)\/milestone\/(add|edit|done|replace)$/, form: true, goal: true, back: p => goalPath(p[0]) },
+  { name: 'goal', pattern: /^\/goal\/([^/]+)$/, form: true, nav: true, goal: true, back: () => '/' },
+  { name: 'shelf', pattern: /^\/shelf$/, nav: true, tab: 'shelf' },
+  { name: 'settings', pattern: /^\/settings$/, nav: true, noDoc: true, back: () => '/' },
+  { name: 'diagnostics', pattern: /^\/settings\/diagnostics$/, nav: true, noDoc: true, back: () => '/settings' },
+];
+function goalPath(id) { return '/goal/' + encodeURIComponent(id); }
+function routeFor(path) {
+  for (const r of ROUTES) {
+    const m = r.pattern.exec(path);
+    if (!m) continue;
+    const params = m.slice(1).map(x => { try { return decodeURIComponent(x); } catch (e) { return x; } });
+    return {
+      name: r.name, params, path, form: !!r.form, nav: !!r.nav, tab: r.tab || '', noDoc: !!r.noDoc,
+      goalId: r.goal ? params[0] : null, action: params[1] || '', back: r.back ? r.back(params) : '/', unknown: false,
+    };
+  }
+  return { name: 'board', params: [], path, form: false, nav: true, tab: 'board', noDoc: false, goalId: null, action: '', back: '/', unknown: true };
+}
+function currentRoute() { return routeFor((location.hash || '').replace(/^#/, '') || '/'); }
+function isFormRoute() { return currentRoute().form; }
+function navigate(path) { location.hash = '#' + path; }
+// Each history entry stores its depth inside the app, so Back never leaves the app by mistake.
+function syncDepth() {
+  const s = history.state;
+  if (s && isInt(s.depth)) APP.depth = s.depth;
+  else {
+    APP.depth = APP.depthKnown ? APP.depth + 1 : 0;
+    try { history.replaceState({ depth: APP.depth }, ''); } catch (e) { /* depth stays in memory only */ }
+  }
+  APP.depthKnown = true;
+}
+function goBack(fallback) {
+  if (APP.depth > 0) { history.back(); return; }
+  replaceRoute(fallback);
+}
+// Shows another screen in place of this one without adding a history entry, so Back skips this one.
+function replaceRoute(path) {
+  try { history.replaceState({ depth: APP.depth }, '', '#' + path); } catch (e) { location.replace('#' + path); return; }
+  onRouteChange();
+}
+function onRouteChange() {
+  if (APP.routeName === 'board') APP.scroll.board = window.scrollY;
+  syncDepth();
+  closeDialog();
+  render();
+  const h = document.querySelector('#page h1');
+  if (h) { try { h.focus({ preventScroll: true }); } catch (e) { h.focus(); } }
+  window.scrollTo(0, APP.routeName === 'board' ? (APP.scroll.board || 0) : 0);
+}
+/* =============================== SELFTEST =============================== */
+// Runs on sample data in memory only: it never changes your data or the real store (spec 10). Dates are
+// fixed around Wednesday 11 Nov 2026 and built in local time, so results don't depend on today or time zone.
+function runSelfTest() {
+  const results = [];
+  const test = (name, fn) => {
+    try {
+      fn();
+      results.push({ name, pass: true, detail: '' });
+    } catch (e) {
+      results.push({ name, pass: false, detail: (e instanceof UserError ? 'Refused: ' : '') + ((e && e.message) || String(e)) });
+    }
+  };
+  const check = (cond, msg) => { if (!cond) throw new Error(msg); };
+  const eq = (actual, expected, label) => {
+    if (!deepEqual(actual, expected)) throw new Error(label + ': expected ' + JSON.stringify(expected) + ', got ' + JSON.stringify(actual));
+  };
+  const refuses = (fn, label) => {
+    let threw = null;
+    try { fn(); } catch (e) { threw = e; }
+    if (!threw) throw new Error(label + ': expected a refusal, but it was accepted');
+    if (!(threw instanceof UserError)) throw new Error(label + ': expected a refusal, got an error: ' + threw.message);
+  };
+  const NOW = new Date(2026, 10, 11, 12, 0, 0);          // Wednesday 11 Nov 2026, local noon
+  const CUR = '2026-11-09';                               // its week, starting Monday
+  const PREV = '2026-11-02';
+  const at = s => { const p = parseYMD(s); return new Date(p.y, p.m - 1, p.d, 12, 0, 0); };
+  const run = (doc, name, payload, now) => runAction(doc, name, payload, now || NOW);
+  const withGoals = n => {
+    let d = defaultDoc(NOW);
+    const ids = [];
+    for (let i = 1; i <= n; i += 1) {
+      const r = run(d, 'addGoal', { title: 'Goal ' + i });
+      d = r.doc;
+      ids.push(r.result.goalId);
+    }
+    return { d, ids };
+  };
+  const goal = (d, id) => goalById(d, id);
+  const pushDone = (d, weekKey, answers) => {
+    d.checkins.push({
+      id: newId(), weekKey, startedAt: isoNow(NOW), completedAt: isoNow(NOW),
+      items: Object.keys(answers).map(id => ({ goalId: id, progress: answers[id], note: '', nextAction: null })),
+      focusGoalIds: [],
+    });
+  };
+  const demo = () => makeDemoDoc(NOW);
+  const breaks = (mutate, fragment) => {
+    const d = demo();
+    mutate(d);
+    const errs = validate(d);
+    check(errs.some(e => e.indexOf(fragment) !== -1), 'expected a problem containing "' + fragment + '", got ' + (errs.length ? errs.join(' | ') : 'none'));
+  };
+  // Screens are drawn off-page from a context with its own in-memory store.
+  const ctxFor = d => ({ doc: d, store: makeStore(memoryBackend(0), 'memory'), now: NOW, today: todayLocal(NOW) });
+  const draw = (path, ctx) => {
+    const route = routeFor(path);
+    if (route.unknown) throw new Error(path + ' is not a known address');
+    const page = el('main');
+    PAGES[route.name](page, route, ctx);
+    return page;
+  };
+
+  /* ---- Dates (spec tests 1-4) ---- */
+  test('1. Today uses the device date, even just after midnight', () => {
+    eq(todayLocal(new Date(2026, 10, 9, 0, 10)), '2026-11-09', 'todayLocal at 00:10');
+  });
+  test('2. Week start for every weekday, Monday and Sunday starts', () => {
+    for (let i = 0; i < 7; i += 1) {
+      const day = addDays('2026-11-09', i);
+      eq(weekStart(day, 1), '2026-11-09', 'Monday start for ' + day);
+      eq(weekStart(day, 0), i === 6 ? '2026-11-15' : '2026-11-08', 'Sunday start for ' + day);
+    }
+    eq(weekStart('2027-01-01', 1), '2026-12-28', '1 Jan 2027');
+  });
+  test('3. Adding days across year ends and leap days', () => {
+    eq(addDays('2026-12-31', 1), '2027-01-01', '31 Dec 2026 + 1');
+    eq(addDays('2028-02-28', 1), '2028-02-29', '28 Feb 2028 + 1');
+    eq(addDays('2027-02-28', 1), '2027-03-01', '28 Feb 2027 + 1');
+    eq(diffDays('2026-11-09', '2026-11-11'), 2, 'days between');
+  });
+  test('4. Impossible dates are rejected', () => {
+    ['2026-02-30', '2026-13-01', '26-1-1', ''].forEach(s => check(parseYMD(s) === null, '"' + s + '" was accepted'));
+    check(parseYMD('2028-02-29') !== null, '29 Feb 2028 was rejected');
+    check(!isYM('2026-13') && isYM('2026-12'), 'month check');
+  });
+
+  /* ---- Rules (spec test 5) ---- */
+  test('5a. Empty and demo data pass every rule', () => {
+    eq(validate(defaultDoc(NOW)), [], 'empty data');
+    eq(validate(demo()), [], 'demo data');
+  });
+  test('5b. Rule 1: repeated ids are caught', () => breaks(d => { d.changes[0].id = d.goals[0].id; }, 'repeats id'));
+  test('5c. Rule 2: links to missing goals are caught', () => {
+    breaks(d => { d.changes[0].goalId = 'missing'; }, 'points to a goal that does not exist');
+    breaks(d => { d.checkins[0].items[0].goalId = 'missing'; }, 'points to a goal that does not exist');
+    breaks(d => { d.checkins[0].focusGoalIds = ['missing']; }, 'has a focus goal that does not exist');
+  });
+  test('5d. Rule 3: focus only on active goals, at most three', () => {
+    breaks(d => { d.goals[4].inFocus = true; }, 'is in focus but not active');
+    breaks(d => { d.goals[3].inFocus = true; }, 'More than 3 goals are in focus');
+  });
+  test('5e. Rule 4: revisit dates only on parked goals', () => breaks(d => { d.goals[0].revisitOn = '2026-12-01'; }, 'has a revisit date but is not parked'));
+  test('5f. Rule 5: one current milestone, none on closed goals', () => {
+    breaks(d => { d.goals[0].milestones[0].status = 'current'; }, 'more than one current milestone');
+    breaks(d => { d.goals[5].milestones[0].status = 'current'; }, 'closed but still has a current milestone');
+  });
+  test('5g. Rule 6: one check-in per week, starting on the right day', () => {
+    breaks(d => { d.checkins[1].weekKey = d.checkins[0].weekKey; }, 'repeats the week of');
+    breaks(d => { d.checkins[0].weekKey = addDays(d.checkins[0].weekKey, 1); }, 'does not start on the chosen first day');
+  });
+  test('5h. Rule 7: one draft at a time, finished check-ins fully answered', () => {
+    breaks(d => { d.checkins[0].completedAt = null; d.checkins[1].completedAt = null; }, 'more than one draft');
+    breaks(d => { d.checkins[0].items[0].progress = null; }, 'unanswered in a finished check-in');
+  });
+  test('5i. Rule 8: wrong values and impossible dates are caught', () => {
+    breaks(d => { d.goals[0].status = 'paused'; }, 'unknown status');
+    breaks(d => { d.goals[0].targetMonth = '2026-13'; }, 'targetMonth must be');
+    breaks(d => { d.goals[0].milestones[1].dueDate = '2026-02-30'; }, 'dueDate must be a date');
+    breaks(d => { d.settings.weekStartsOn = 7; }, 'weekStartsOn must be 0 to 6');
+  });
+
+  /* ---- Goals, status and milestones (spec tests 6-8) ---- */
+  test('6. Editing: no change and spaces add nothing, two fields make one entry, minor is kept', () => {
+    const { d, ids } = withGoals(1);
+    const g = ids[0];
+    const base = d.changes.length;
+    check(!run(d, 'editGoal', { goalId: g, title: 'Goal 1', why: '', doneLooksLike: '', targetMonth: null }).changed, 'saving without changes changed the data');
+    check(!run(d, 'editGoal', { goalId: g, title: '  Goal 1  ', why: '   ', doneLooksLike: '', targetMonth: '' }).changed, 'spaces only changed the data');
+    const two = run(d, 'editGoal', { goalId: g, title: 'Goal one', why: 'Because', doneLooksLike: '', targetMonth: null }).doc;
+    eq(two.changes.length, base + 1, 'history entries');
+    const last = two.changes[two.changes.length - 1];
+    eq([last.kind, last.diffs.map(x => x.field)], ['edited', ['title', 'why']], 'entry');
+    const minor = run(two, 'editGoal', { goalId: g, title: 'Goal one', why: 'Because', doneLooksLike: 'Done', targetMonth: null, minor: true }).doc;
+    check(minor.changes[minor.changes.length - 1].minor === true, 'minor flag not stored');
+  });
+  test('7a. Parking needs a reason and a future revisit date, and clears focus', () => {
+    let { d, ids } = withGoals(2);
+    d = run(d, 'setFocus', { goalId: ids[0], on: true }).doc;
+    refuses(() => run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: '  ' }), 'parking without a reason');
+    refuses(() => run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Exams first', revisitOn: '2026-11-11' }), 'revisit date of today');
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Exams first', revisitOn: '2026-12-01' }).doc;
+    const g = goal(d, ids[0]);
+    eq([g.status, g.inFocus, g.revisitOn], ['parked', false, '2026-12-01'], 'parked goal');
+  });
+  test('7b. Reactivating clears the revisit date and moves the goal last', () => {
+    let { d, ids } = withGoals(3);
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later', revisitOn: '2026-12-01' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'active' }).doc;
+    const g = goal(d, ids[0]);
+    eq([g.status, g.revisitOn, d.goals[d.goals.length - 1].id], ['active', null, ids[0]], 'reactivated goal');
+    eq(d.changes[d.changes.length - 1].diffs, [{ field: 'status', from: 'parked', to: 'active' }, { field: 'revisitOn', from: '2026-12-01', to: null }], 'history entry');
+  });
+  test('7c. A 13th active goal is refused, when adding or reactivating', () => {
+    let { d, ids } = withGoals(12);
+    refuses(() => run(d, 'addGoal', { title: 'Goal 13' }), 'adding a 13th');
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Room' }).doc;
+    d = run(d, 'addGoal', { title: 'Goal 13' }).doc;
+    refuses(() => run(d, 'setStatus', { goalId: ids[0], to: 'active' }), 'reactivating a 13th');
+  });
+  test('7d. A fourth focus goal is refused unless one is swapped out', () => {
+    let { d, ids } = withGoals(4);
+    for (let i = 0; i < 3; i += 1) d = run(d, 'setFocus', { goalId: ids[i], on: true }).doc;
+    refuses(() => run(d, 'setFocus', { goalId: ids[3], on: true }), 'a fourth focus goal');
+    d = run(d, 'setFocus', { goalId: ids[3], on: true, replaceGoalId: ids[0] }).doc;
+    eq(focusGoals(d).map(g => g.id), [ids[1], ids[2], ids[3]], 'focus after the swap');
+  });
+  test('7e. Achieving closes the current milestone; dropping needs a reason', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'addMilestone', { goalId: ids[0], text: 'Step one' }).doc;
+    refuses(() => run(d, 'setStatus', { goalId: ids[0], to: 'dropped' }), 'dropping without a reason');
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'achieved' }).doc;
+    const g = goal(d, ids[0]);
+    check(g.closedAt !== null && g.milestones[0].status === 'done' && g.milestones[0].closedAt !== null, 'milestone not closed on achieve');
+  });
+  test('8. Milestones: one current, done sets closedAt, replace keeps the old one', () => {
+    let { d, ids } = withGoals(1);
+    const g = ids[0];
+    const first = run(d, 'addMilestone', { goalId: g, text: 'First' });
+    d = first.doc;
+    refuses(() => run(d, 'addMilestone', { goalId: g, text: 'Second' }), 'a second current milestone');
+    d = run(d, 'completeMilestone', { goalId: g, milestoneId: first.result.milestoneId }).doc;
+    const m1 = goal(d, g).milestones[0];
+    check(m1.status === 'done' && isISO(m1.closedAt), 'the done milestone has no closedAt');
+    const third = run(d, 'addMilestone', { goalId: g, text: 'Third' });
+    d = run(third.doc, 'replaceMilestone', { goalId: g, milestoneId: third.result.milestoneId, text: 'Fourth' }).doc;
+    eq(goal(d, g).milestones.map(m => m.text + ':' + m.status), ['First:done', 'Third:dropped', 'Fourth:current'], 'milestones');
+    eq(d.changes[d.changes.length - 1].kind, 'milestone-replaced', 'history kind');
+  });
+  test('8b. Repeated submits change nothing the second time', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'addGoal', { id: 'fixed-goal-id', title: 'Once' }).doc;
+    check(!run(d, 'addGoal', { id: 'fixed-goal-id', title: 'Once' }).changed, 'goal added twice');
+    d = run(d, 'addMilestone', { goalId: 'fixed-goal-id', id: 'fixed-milestone-id', text: 'Step' }).doc;
+    check(!run(d, 'addMilestone', { goalId: 'fixed-goal-id', id: 'fixed-milestone-id', text: 'Step' }).changed, 'milestone added twice');
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later' }).doc;
+    check(!run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later' }).changed, 'parked twice');
+    d = run(d, 'deleteGoal', { goalId: 'fixed-goal-id' }).doc;
+    check(!run(d, 'deleteGoal', { goalId: 'fixed-goal-id' }).changed, 'deleted twice');
+  });
+  test('8c. Titles are cleaned and checked', () => {
+    const d = defaultDoc(NOW);
+    const r = run(d, 'addGoal', { title: '  Line one\nline two  ' });
+    eq(goal(r.doc, r.result.goalId).title, 'Line one line two', 'flattened title');
+    refuses(() => run(d, 'addGoal', { title: '   ' }), 'a blank title');
+    refuses(() => run(d, 'addGoal', { title: 'x'.repeat(81) }), 'an 81-character title');
+  });
+
+  /* ---- Check-ins (spec tests 9-13) ---- */
+  test('9. Check-in: one draft per start, every answer needed, a second Finish is harmless', () => {
+    let { d, ids } = withGoals(2);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    check(!run(d, 'startCheckin', { weekKey: CUR }).changed, 'a second start changed the data');
+    eq(d.checkins.length, 1, 'check-ins after two starts');
+    refuses(() => run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }), 'finishing with unanswered goals');
+    ids.forEach(id => { d = run(d, 'answerItem', { weekKey: CUR, goalId: id, progress: 'yes' }).doc; });
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }).doc;
+    const again = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] });
+    check(!again.changed && again.result.alreadyDone === true, 'a second Finish was not harmless');
+    eq(d.checkins.filter(c => c.completedAt !== null).length, 1, 'finished check-ins');
+    refuses(() => run(d, 'startCheckin', { weekKey: CUR }), 'a second check-in for the same week');
+  });
+  test('9b. Check-ins only for this week or last week, one draft at a time', () => {
+    let { d } = withGoals(1);
+    refuses(() => run(d, 'startCheckin', { weekKey: '2026-10-26' }), 'two weeks ago');
+    refuses(() => run(d, 'startCheckin', { weekKey: '2026-11-16' }), 'next week');
+    d = run(d, 'startCheckin', { weekKey: PREV }).doc;
+    refuses(() => run(d, 'startCheckin', { weekKey: CUR }), 'a second draft');
+    refuses(() => run(defaultDoc(NOW), 'startCheckin', { weekKey: CUR }), 'no active goals');
+  });
+  test('10. Finish copies only edited next actions; an older week changes no goal', () => {
+    let { d, ids } = withGoals(2);
+    d = run(d, 'setNextAction', { goalId: ids[0], nextAction: 'Old A' }).doc;
+    d = run(d, 'setNextAction', { goalId: ids[1], nextAction: 'Old B' }).doc;
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes', nextAction: 'New A' }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[1], progress: 'no' }).doc;
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [ids[1]] }).doc;
+    eq([goal(d, ids[0]).nextAction, goal(d, ids[1]).nextAction], ['New A', 'Old B'], 'next actions');
+    eq([goal(d, ids[0]).inFocus, goal(d, ids[1]).inFocus], [false, true], 'focus');
+    const goalsBefore = JSON.stringify(d.goals);
+    d = run(d, 'startCheckin', { weekKey: PREV }).doc;
+    ids.forEach(id => { d = run(d, 'answerItem', { weekKey: PREV, goalId: id, progress: 'yes', nextAction: 'Older' }).doc; });
+    d = run(d, 'finishCheckin', { weekKey: PREV, focusGoalIds: [ids[0]] }).doc;
+    eq(JSON.stringify(d.goals), goalsBefore, 'goals after finishing the older week');
+  });
+  test('10b. A check-in dated in the future does not block later updates', () => {
+    let { d, ids } = withGoals(1);
+    const wrongClock = new Date(2026, 11, 8, 12, 0, 0);    // Tuesday 8 Dec 2026
+    d = run(d, 'startCheckin', { weekKey: '2026-12-07' }, wrongClock).doc;
+    d = run(d, 'answerItem', { weekKey: '2026-12-07', goalId: ids[0], progress: 'no' }, wrongClock).doc;
+    d = run(d, 'finishCheckin', { weekKey: '2026-12-07', focusGoalIds: [] }, wrongClock).doc;
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes', nextAction: 'Fixed clock' }).doc;
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [ids[0]] }).doc;
+    eq([goal(d, ids[0]).nextAction, goal(d, ids[0]).inFocus], ['Fixed clock', true], 'goal after the real week');
+    check(isLatestCompleted(d, CUR, NOW), 'the future check-in still counts as the latest');
+  });
+  test('11. Default week: last week early on if unfinished, otherwise this week', () => {
+    let { d, ids } = withGoals(1);
+    eq(defaultCheckinWeek(d, at('2026-11-09')), PREV, 'Monday');
+    eq(defaultCheckinWeek(d, at('2026-11-11')), PREV, 'Wednesday');
+    eq(defaultCheckinWeek(d, at('2026-11-12')), CUR, 'Thursday');
+    const mon = at('2026-11-09');
+    d = run(d, 'startCheckin', { weekKey: PREV }, mon).doc;
+    d = run(d, 'answerItem', { weekKey: PREV, goalId: ids[0], progress: 'yes' }, mon).doc;
+    d = run(d, 'finishCheckin', { weekKey: PREV, focusGoalIds: [] }, mon).doc;
+    eq(defaultCheckinWeek(d, mon), CUR, 'Monday after finishing last week');
+  });
+  test('12. Reconcile after parking a goal and adding one mid-check-in', () => {
+    let { d, ids } = withGoals(3);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[1], to: 'parked', reason: 'Later' }).doc;
+    const added = run(d, 'addGoal', { title: 'Added mid-check-in' });
+    d = run(added.doc, 'reconcileDraft', { weekKey: CUR }).doc;
+    eq(checkinByWeek(d, CUR).items.map(it => it.goalId).sort(), [ids[0], ids[2], added.result.goalId].sort(), 'goals in the check-in');
+    eq(nextStepGoalId(d, checkinByWeek(d, CUR)), ids[2], 'next step');
+  });
+  test('13. Stalled after three "no" answers; gaps and other check-ins do not reset it', () => {
+    const mk = weeks => {
+      const { d, ids } = withGoals(2);
+      weeks.forEach(([wk, p]) => pushDone(d, wk, p === null ? { [ids[1]]: 'yes' } : { [ids[0]]: p, [ids[1]]: 'yes' }));
+      eq(validate(d), [], 'test data');
+      return isStalled(d, ids[0], NOW);
+    };
+    check(mk([['2026-10-19', 'no'], ['2026-10-26', 'no'], [PREV, 'no']]) === true, 'no, no, no should be stalled');
+    check(mk([['2026-10-19', 'no'], ['2026-10-26', 'no'], [PREV, 'some']]) === false, 'no, no, a bit should not be stalled');
+    check(mk([['2026-10-12', 'no'], ['2026-10-19', 'no'], [PREV, 'no']]) === true, 'a week without a check-in should not reset it');
+    check(mk([['2026-10-12', 'no'], ['2026-10-19', 'no'], ['2026-10-26', null], [PREV, 'no']]) === true, 'a check-in without the goal should not reset it');
+    check(mk([['2026-10-19', 'no'], ['2026-10-26', null], [PREV, 'no']]) === false, 'a check-in without the goal should not count as "no"');
+    check(mk([['2026-10-19', 'no'], ['2026-10-26', 'no'], [PREV, 'no'], ['2026-12-07', 'yes']]) === true, 'a future-dated check-in should be ignored');
+  });
+  test('13b. The stall prompt comes on the third "no", and Keep going snoozes it', () => {
+    const { d, ids } = withGoals(1);
+    pushDone(d, '2026-10-26', { [ids[0]]: 'no' });
+    check(!shouldPromptStall(d, ids[0], PREV, 'no'), 'prompted on only the second "no"');
+    pushDone(d, PREV, { [ids[0]]: 'no' });
+    check(shouldPromptStall(d, ids[0], CUR, 'no'), 'no prompt on the third "no"');
+    check(!shouldPromptStall(d, ids[0], CUR, 'some'), 'prompted on "a bit"');
+    const snoozed = run(d, 'snoozeStall', { goalId: ids[0], weekKey: CUR }).doc;
+    eq(goal(snoozed, ids[0]).staleSnoozeUntil, '2026-11-30', 'snooze date');
+    check(!shouldPromptStall(snoozed, ids[0], '2026-11-16', 'no'), 'prompted while snoozed');
+  });
+
+  /* ---- Delete, backups, ids, text (spec tests 14-17) ---- */
+  test('14. Deleting a goal removes every trace and leaves valid data', () => {
+    const d0 = demo();
+    const id = d0.goals[0].id;
+    const d = run(d0, 'deleteGoal', { goalId: id }).doc;
+    eq(validate(d), [], 'rules after the delete');
+    check(!goalById(d, id), 'the goal is still there');
+    check(!d.changes.some(c => c.goalId === id), 'history left behind');
+    check(!d.checkins.some(c => c.items.some(it => it.goalId === id) || c.focusGoalIds.includes(id)), 'check-in traces left behind');
+  });
+  test('15. A backup round trip returns the same data', () => {
+    const d = demo();
+    check(deepEqual(parseBackupText(exportText(d, NOW)), d), 'the imported data differs from the original');
+    eq(backupFileName(NOW), 'compass-backup-2026-11-11.json', 'file name');
+  });
+  test('15b. Import refuses bad backups', () => {
+    const base = demo();
+    const variant = mutate => { const o = clone(base); mutate(o); return JSON.stringify(o); };
+    refuses(() => parseBackupText('not json'), 'not JSON');
+    refuses(() => parseBackupText(variant(o => { o.app = 'other'; })), 'another app');
+    refuses(() => parseBackupText(variant(o => { o.goals[0].status = 'paused'; })), 'an unknown status');
+    refuses(() => parseBackupText(variant(o => { o.changes[0].goalId = 'missing'; })), 'a link to a missing goal');
+    refuses(() => parseBackupText(variant(o => { o.changes[0].id = o.goals[0].id; })), 'a repeated id');
+    refuses(() => parseBackupText(variant(o => { o.checkins[1].weekKey = o.checkins[0].weekKey; })), 'a repeated week');
+    refuses(() => parseBackupText(variant(o => { o.schemaVersion = SCHEMA_VERSION + 1; })), 'a newer format');
+  });
+  test('16. Ids stay unique with and without crypto.randomUUID', () => {
+    const c = typeof crypto !== 'undefined' ? crypto : null;
+    const gens = [
+      ['with randomUUID', makeIdGen(c)],
+      ['without randomUUID', makeIdGen(c && c.getRandomValues ? { getRandomValues: a => c.getRandomValues(a) } : null)],
+      ['without crypto', makeIdGen(null)],
+    ];
+    gens.forEach(([label, gen]) => {
+      const seen = new Set();
+      for (let i = 0; i < 1000; i += 1) seen.add(gen());
+      check(seen.size === 1000, label + ': ' + (1000 - seen.size) + ' repeated ids');
+    });
+    if (c && c.getRandomValues) check(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(gens[1][1]()), 'id format without randomUUID');
+  });
+  test('17. Text that looks like HTML stays text', () => {
+    const s = '<img src=x onerror=alert(1)>';
+    const n = el('div', null, s);
+    check(n.children.length === 0 && n.textContent === s, 'the text became an element');
+  });
+
+  /* ---- v1.1 fixes and other safety checks ---- */
+  test('18. Repair never crashes and fixes what it safely can', () => {
+    [null, 'x', {}, { goals: [null], changes: [], checkins: [] }, { goals: 'x', changes: [], checkins: [] }].forEach(bad => { repairDoc(bad, NOW); });
+    const d = demo();
+    d.goals[4].inFocus = true;                     // a parked goal in focus
+    d.goals[3].inFocus = true;                     // a fourth focus goal
+    d.goals[0].revisitOn = '2026-12-01';           // a revisit date on an active goal
+    d.goals[0].milestones[0].status = 'current';   // two current milestones
+    d.changes[0].goalId = 'missing';
+    d.checkins[0].focusGoalIds.push('missing');
+    const fixed = repairDoc(d, NOW);
+    eq(validate(fixed), [], 'rules after repair');
+    eq(fixed.goals[0].milestones.map(m => m.status), ['dropped', 'current'], 'kept the newest current milestone');
+  });
+  test('19. Start-up reads empty, unreadable, newer, normal and repairable data correctly', () => {
+    const d = demo();
+    eq(interpretStored(null, NOW).status, 'empty', 'nothing stored');
+    eq(interpretStored('{oops', NOW).status, 'unreadable', 'broken JSON');
+    eq(interpretStored(JSON.stringify({ app: 'other' }), NOW).status, 'unreadable', 'another app');
+    eq(interpretStored(JSON.stringify(Object.assign({}, d, { schemaVersion: SCHEMA_VERSION + 1 })), NOW).status, 'newer', 'a newer format');
+    const ok = interpretStored(JSON.stringify(d), NOW);
+    check(ok.status === 'ok' && !ok.repaired && deepEqual(ok.doc, d), 'normal data');
+    const fixable = clone(d);
+    fixable.goals[4].inFocus = true;
+    const rep = interpretStored(JSON.stringify(fixable), NOW);
+    check(rep.status === 'ok' && rep.repaired && !rep.doc.goals[4].inFocus, 'repairable data');
+    const broken = clone(d);
+    broken.checkins[1].weekKey = broken.checkins[0].weekKey;
+    eq(interpretStored(JSON.stringify(broken), NOW).status, 'unreadable', 'unrepairable data');
+  });
+  test('20. Saves raise the counter; imports land above both', () => {
+    const st = makeStore(memoryBackend(0), 'local');
+    let d = st.save(defaultDoc(NOW)).doc;
+    eq(d.rev, 1, 'first save');
+    d = st.save(d).doc;
+    eq(d.rev, 2, 'second save');
+    const low = st.replaceAll(Object.assign(clone(d), { rev: 0 }), NOW, 'test import');
+    eq([low.ok, low.doc && low.doc.rev], [true, 3], 'import with a lower counter');
+    const high = st.replaceAll(Object.assign(clone(d), { rev: 10 }), NOW, 'test import');
+    eq([high.ok, high.doc && high.doc.rev], [true, 11], 'import with a higher counter');
+  });
+  test('21. A stale tab cannot save over newer or erased data', () => {
+    const backend = memoryBackend(0);
+    const a = makeStore(backend, 'local');
+    const b = makeStore(backend, 'local');
+    const d = a.save(defaultDoc(NOW)).doc;
+    eq(b.save(defaultDoc(NOW)).reason, 'conflict', 'a stale tab saving over new data');
+    b.loadedRev = d.rev;
+    check(b.save(d).ok, 'an up-to-date tab could not save');
+    eq(a.save(d).reason, 'conflict', 'the older tab after the other tab saved');
+    a.loadedRev = b.loadedRev;
+    b.eraseAll();
+    eq(a.save(d).reason, 'conflict', 'saving after the data was erased elsewhere');
+  });
+  test('22. When storage is full, safety copies are cleared first', () => {
+    const d0 = defaultDoc(NOW);
+    const d1 = runAction(d0, 'addGoal', { title: 'A goal that makes the data bigger' }, NOW).doc;
+    const fill = 'x'.repeat(200);
+    const safetyLen = KEYS.safety.length + JSON.stringify([{ at: isoNow(NOW), reason: 'filler', raw: fill }]).length;
+    const d1Len = KEYS.data.length + JSON.stringify(Object.assign({}, d1, { rev: 2 })).length;
+    const st = makeStore(memoryBackend(d1Len + safetyLen - 1), 'local');
+    check(st.save(d0).ok, 'the first save failed');
+    check(st.takeSafetyCopy(fill, 'filler', NOW), 'the safety copy did not fit');
+    const saved = st.save(d1);
+    eq([saved.ok, st.mode, st.safetyCopies().length, revOfText(st.readRaw()).rev], [true, 'local', 0, 2], 'a save that only fits without the safety copy');
+  });
+  test('23. A save that cannot fit keeps the data in memory and says so', () => {
+    const d0 = defaultDoc(NOW);
+    const d0Len = KEYS.data.length + JSON.stringify(Object.assign({}, d0, { rev: 1 })).length;
+    const st = makeStore(memoryBackend(d0Len), 'local');
+    check(st.save(d0).ok, 'the first save failed');
+    const big = runAction(d0, 'addGoal', { title: 'Too big to fit' }, NOW).doc;
+    const saved = st.save(big);
+    eq([saved.ok, st.mode, revOfText(st.readRaw()).rev], [true, 'memory', 2], 'a save that cannot fit');
+    check(st.memoryReason.indexOf('the last save failed') === 0, 'no reason given for memory mode');
+  });
+  test('24. A failed import leaves the current data exactly as it was', () => {
+    const st = makeStore(memoryBackend(3000), 'local');
+    check(st.save(defaultDoc(NOW)).ok, 'the first save failed');
+    const before = st.readRaw();
+    const result = st.replaceAll(demo(), NOW, 'test import');
+    eq([result.ok, result.reason, st.readRaw() === before, st.mode], [false, 'full', true, 'local'], 'after a failed import');
+  });
+  test('25. Old editor drafts and drafts for deleted goals are cleared', () => {
+    const { d, ids } = withGoals(1);
+    const st = makeStore(memoryBackend(0), 'local');
+    st.setDraft(ids[0], { title: 'Recent' }, NOW);
+    st.setDraft('deleted-goal', { title: 'Gone' }, NOW);
+    st.setDraft(null, { title: 'Old new goal' }, new Date(NOW.getTime() - 15 * DAY_MS));
+    st.cleanupDrafts(d, NOW);
+    eq(st.draftKeys(), [st.draftKey(ids[0])], 'drafts left');
+    st.setDraft(null, { title: 'Fresh new goal' }, NOW);
+    st.cleanupDrafts(d, NOW);
+    eq(st.draftKeys().length, 2, 'a fresh new-goal draft was removed');
+  });
+  test('26. Reordering skips goals that are not active', () => {
+    let { d, ids } = withGoals(3);
+    d = run(d, 'setStatus', { goalId: ids[1], to: 'parked', reason: 'Later' }).doc;
+    d = run(d, 'moveGoal', { goalId: ids[2], direction: 'up' }).doc;
+    eq(d.goals.map(g => g.id), [ids[2], ids[1], ids[0]], 'order after moving up');
+    check(!run(d, 'moveGoal', { goalId: ids[2], direction: 'up' }).changed, 'moved past the top');
+  });
+  test('27. Editing a finished check-in: this week or last only, no side effects', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes' }).doc;
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }).doc;
+    const goalsBefore = JSON.stringify(d.goals);
+    d = run(d, 'editCheckin', { weekKey: CUR, items: [{ goalId: ids[0], progress: 'no', note: 'Changed my mind' }] }).doc;
+    const it = checkinByWeek(d, CUR).items[0];
+    eq([it.progress, it.note], ['no', 'Changed my mind'], 'edited answer');
+    eq(JSON.stringify(d.goals), goalsBefore, 'goals after editing');
+    refuses(() => run(d, 'editCheckin', { weekKey: CUR, items: [] }, at('2026-11-25')), 'editing a check-in from two weeks back');
+  });
+  test('28. The week start locks once a check-in exists', () => {
+    let { d } = withGoals(1);
+    d = run(d, 'updateSettings', { weekStartsOn: '0', staleAfter: '4' }).doc;
+    eq([d.settings.weekStartsOn, d.settings.staleAfter], [0, 4], 'settings given as text');
+    d = run(d, 'updateSettings', { weekStartsOn: 1 }).doc;
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    refuses(() => run(d, 'updateSettings', { weekStartsOn: 0 }), 'changing the week start');
+    refuses(() => run(d, 'updateSettings', { staleAfter: 9 }), 'a stall limit out of range');
+  });
+  test('29. Finish refuses an empty check-in and a focus pick that is no longer active', () => {
+    let { d, ids } = withGoals(2);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    ids.forEach(id => { d = run(d, 'answerItem', { weekKey: CUR, goalId: id, progress: 'yes' }).doc; });
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later' }).doc;
+    refuses(() => run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [ids[0]] }), 'focus on a parked goal');
+    const one = withGoals(1);
+    let e = run(one.d, 'startCheckin', { weekKey: CUR }).doc;
+    e = run(e, 'setStatus', { goalId: one.ids[0], to: 'parked', reason: 'Later' }).doc;
+    refuses(() => run(e, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }), 'an empty check-in');
+  });
+  test('30. A note saved after Finish is ignored', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes' }).doc;
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }).doc;
+    check(!run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], note: 'Late' }).changed, 'a late note changed a finished check-in');
+  });
+  test('31. Demo data reads correctly: revisits, weekly cells, focus, stalls', () => {
+    const d = demo();
+    eq(revisitsDue(d, NOW).map(g => g.title), ['Learn conversational Spanish'], 'revisits due');
+    eq([cellState(d, d.goals[0].id, PREV), cellState(d, d.goals[4].id, PREV), cellState(d, d.goals[0].id, CUR)], ['yes', 'excluded', 'none'], 'weekly cells');
+    eq(focusGoals(d).length, 3, 'focus goals');
+    check(isStalled(d, d.goals[2].id, NOW) && !isStalled(d, d.goals[0].id, NOW), 'stalled goals');
+  });
+
+  /* ---- Phase 2: screens ---- */
+  test('32. Target and milestone wording: this month, in N months, overdue, due today', () => {
+    const today = '2026-11-11';
+    eq(monthsBetween('2026-11', '2027-02'), 3, 'months between');
+    check(targetText('2026-11', today).endsWith('this month'), 'this month: ' + targetText('2026-11', today));
+    check(targetText('2026-12', today).endsWith('in 1 month'), 'one month: ' + targetText('2026-12', today));
+    check(targetText('2027-03', today).endsWith('in 4 months'), 'four months: ' + targetText('2027-03', today));
+    check(targetText('2026-10', today).endsWith('overdue'), 'overdue: ' + targetText('2026-10', today));
+    eq(milestoneText({ text: 'X', dueDate: today }, today), 'X · due today', 'due today');
+    eq(milestoneText({ text: 'X', dueDate: '2026-11-10' }, today), 'X · overdue', 'overdue milestone');
+    eq(milestoneText({ text: 'X', dueDate: null }, today), 'X', 'no due date');
+  });
+  test('33. Each address opens the right screen, and Back has the right fallback', () => {
+    const cases = [
+      ['/', 'board', null, ''], ['/reorder', 'reorder', null, '/'], ['/goal/new', 'goalNew', null, '/'],
+      ['/goal/abc', 'goal', 'abc', '/'], ['/goal/abc/edit', 'goalEdit', 'abc', '/goal/abc'],
+      ['/goal/abc/status/park', 'goalStatus', 'abc', '/goal/abc'], ['/goal/abc/milestone/replace', 'goalMilestone', 'abc', '/goal/abc'],
+      ['/shelf', 'shelf', null, ''], ['/settings', 'settings', null, '/'], ['/settings/diagnostics', 'diagnostics', null, '/settings'],
+    ];
+    cases.forEach(([path, name, goalId, back]) => {
+      const r = routeFor(path);
+      eq([r.name, r.goalId, r.unknown], [name, goalId, false], path);
+      if (back) eq(r.back, back, 'Back from ' + path);
+    });
+    ['/nope', '/goal/abc/status/fly', '/goal/', '/goal/abc/milestone/x'].forEach(p => check(routeFor(p).unknown, p + ' should be unknown'));
+    eq([routeFor('/goal/abc').form, routeFor('/').form, routeFor('/goal/abc/edit').nav], [true, false, false], 'typing and tab-bar flags');
+  });
+  test('34. The editor spots real changes only, and needs both month and year', () => {
+    const saved = { title: 'Run', why: 'Health', doneLooksLike: '', targetMonth: '2027-03' };
+    const f = o => Object.assign({ title: 'Run', why: 'Health', doneLooksLike: '', month: '03', year: '2027', reason: '' }, o);
+    eq(editorChanges(saved, f({})), [], 'no change');
+    eq(editorChanges(saved, f({ title: '  Run  ', why: 'Health\n' })), [], 'spaces only');
+    eq(editorChanges(saved, f({ why: 'Health and calm', year: '2028' })), ['why', 'targetMonth'], 'two changes');
+    eq([toTargetMonth(f({})), toTargetMonth(f({ month: '', year: '' })), toTargetMonth(f({ year: '' }))], ['2027-03', null, 'incomplete'], 'target month');
+    refuses(() => run(defaultDoc(NOW), 'addGoal', { title: 'Y', targetMonth: 'incomplete' }), 'a month without a year');
+  });
+  test('35. Shelf order and reasons', () => {
+    let { d, ids } = withGoals(5);
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'No date' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[1], to: 'parked', reason: 'Later one', revisitOn: '2027-01-10' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[2], to: 'parked', reason: 'Sooner one', revisitOn: '2026-12-01' }).doc;
+    d = run(d, 'keepParked', { goalId: ids[2], revisitOn: '2026-12-05' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[3], to: 'achieved' }, at('2026-11-12')).doc;
+    d = run(d, 'setStatus', { goalId: ids[4], to: 'achieved' }, at('2026-11-13')).doc;
+    const g = shelfGroups(d);
+    eq(g.parked.map(x => x.id), [ids[2], ids[1], ids[0]], 'parked order');
+    eq(g.achieved.map(x => x.id), [ids[4], ids[3]], 'achieved order, newest first');
+    eq(lastStatusChange(d, ids[2]).reason, 'Sooner one', 'reason after changing the revisit date');
+  });
+  test('36. Every screen draws with demo data', () => {
+    const d = demo();
+    const ctx = ctxFor(d);
+    const paths = ['/', '/reorder', '/goal/new', '/shelf', '/settings'];
+    ['active', 'parked', 'achieved'].forEach(s => {
+      const id = encodeURIComponent(d.goals.find(g => g.status === s).id);
+      paths.push('/goal/' + id, '/goal/' + id + '/edit');
+      ['park', 'drop', 'achieve', 'reactivate', 'repark'].forEach(a => paths.push('/goal/' + id + '/status/' + a));
+      ['add', 'edit', 'done', 'replace'].forEach(a => paths.push('/goal/' + id + '/milestone/' + a));
+    });
+    paths.forEach(p => check(draw(p, ctx).querySelector('h1'), p + ' drew no heading'));
+    check(draw('/', ctxFor(defaultDoc(NOW))).querySelector('.empty'), 'the empty board has no welcome');
+  });
+  test('37. A title with HTML and emoji shows exactly as typed', () => {
+    const title = 'Test <b>bold</b> & "quotes" 😀';
+    const r = run(defaultDoc(NOW), 'addGoal', { title });
+    const ctx = ctxFor(r.doc);
+    const cardTitle = draw('/', ctx).querySelector('.gc-title');
+    check(cardTitle && cardTitle.textContent === title && !cardTitle.querySelector('b'), 'board card shows: ' + (cardTitle ? cardTitle.textContent : 'nothing'));
+    const h1 = draw('/goal/' + encodeURIComponent(r.result.goalId), ctx).querySelector('h1');
+    check(h1.textContent === title && !h1.querySelector('b'), 'goal page heading shows: ' + h1.textContent);
+  });
+  test('38. The board puts focus goals first and shows the six-week strip only after a check-in', () => {
+    let { d, ids } = withGoals(3);
+    d = run(d, 'setFocus', { goalId: ids[2], on: true }).doc;
+    let page = draw('/', ctxFor(d));
+    eq(Array.from(page.querySelectorAll('.gc-title')).map(n => n.textContent), ['Goal 3', 'Goal 1', 'Goal 2'], 'card order');
+    check(!page.querySelector('.strip'), 'the strip shows before any check-in');
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    ids.forEach(id => { d = run(d, 'answerItem', { weekKey: CUR, goalId: id, progress: 'yes' }).doc; });
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [ids[2]] }).doc;
+    page = draw('/', ctxFor(d));
+    eq(page.querySelectorAll('.strip').length, 3, 'strips after a check-in');
+  });
+  test('39. History lists the newest entry first by the order written, not by clock time', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'editGoal', { goalId: ids[0], title: 'First edit' }, at('2026-11-12')).doc;
+    d = run(d, 'editGoal', { goalId: ids[0], title: 'Second edit' }, at('2026-11-10')).doc;   // the clock went backwards
+    const items = draw('/goal/' + encodeURIComponent(ids[0]), ctxFor(d)).querySelectorAll('.timeline > li');
+    eq(items.length, 3, 'history entries');
+    check(items[0].textContent.indexOf('Second edit') !== -1 && items[2].textContent.indexOf('Created') !== -1, 'the newest written entry is not first');
+  });
+  test('40. The editor offers to restore a changed draft and drops one that matches', () => {
+    const { d, ids } = withGoals(1);
+    const ctx = ctxFor(d);
+    const editPath = '/goal/' + encodeURIComponent(ids[0]) + '/edit';
+    ctx.store.setDraft(ids[0], { title: 'Goal 1 changed', why: '', doneLooksLike: '', month: '', year: '', reason: '' }, NOW);
+    check(draw(editPath, ctx).querySelector('.notice'), 'no restore offer for a changed draft');
+    ctx.store.setDraft(ids[0], { title: 'Goal 1', why: '', doneLooksLike: '', month: '', year: '', reason: '' }, NOW);
+    check(!draw(editPath, ctx).querySelector('.notice'), 'restore offered for an unchanged draft');
+    check(ctx.store.getDraft(ids[0]) === null, 'the unchanged draft was kept');
+    ctx.store.setDraft(null, { title: 'Half-typed new goal' }, NOW);
+    check(draw('/goal/new', ctx).querySelector('.notice'), 'no restore offer for a new-goal draft');
+  });
+
+  return results;
+}
+
+/* =============================== BOOT =============================== */
+// Start-up (spec 7): read the address flags, pick the storage, load, clean up, listen, draw.
+// Flags: ?demo=1 sample data in memory, ?memory=1 forces the not-saving mode, ?selftest=1 runs the tests.
+function boot() {
+  const now = new Date();
+  const params = new URLSearchParams(location.search);
+  const flag = name => params.get(name) === '1';
+  ensureToast();
+  if (flag('demo')) {
+    APP.demo = true;
+    APP.store = makeStore(memoryBackend(0), 'demo');      // demo never probes or touches real storage
+    APP.doc = APP.store.save(makeDemoDoc(now)).doc;
+    APP.boot = { status: 'demo', problems: [], migrated: false, repaired: false };
+  } else {
+    if (flag('memory')) {
+      APP.store = makeStore(memoryBackend(0), 'memory');
+      APP.store.memoryReason = 'test mode is on (?memory=1).';
+    } else {
+      const probe = probeLocalStorage();
+      if (probe.ok) APP.store = makeStore(probe.backend, 'local');
+      else {
+        APP.store = makeStore(memoryBackend(0), 'memory');
+        APP.store.memoryReason = 'this browser is blocking storage for this page (' + probe.reason + ').';
+      }
+    }
+    loadData(now);
+    if (APP.store.mode === 'local' && APP.doc) APP.store.cleanupDrafts(APP.doc, now);   // only when data loaded properly
+    checkPersistence();
+  }
+  if (flag('selftest')) {
+    APP.selftest = runSelfTest();
+    // The results show on Diagnostics, so start there.
+    try { history.replaceState(null, '', '#/settings/diagnostics'); } catch (e) { location.hash = '#/settings/diagnostics'; }
+  }
+  syncDepth();
+  window.addEventListener('hashchange', onRouteChange);
+  window.addEventListener('storage', e => { if (e.key === KEYS.data || e.key === null) syncFromStorage(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncFromStorage(); });
+  window.addEventListener('pageshow', e => { if (e.persisted) syncFromStorage(); });
+  render();
+}
+
+try {
+  boot();
+} catch (e) {
+  console.error(e);
+  const root = document.getElementById('app');
+  if (root) {
+    root.textContent = '';
+    root.appendChild(document.createTextNode('Compass could not start. Your saved data was not changed. Details: ' + ((e && (e.stack || e.message)) || e)));
+  }
+}
+</script>
+</body>
+</html>
