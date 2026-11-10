@@ -1592,3 +1592,549 @@ function onRouteChange() {
   if (h) { try { h.focus({ preventScroll: true }); } catch (e) { h.focus(); } }
   window.scrollTo(0, 0);
 }
+/* =============================== SELFTEST =============================== */
+// Runs on sample data in memory only: never touches APP or the real store (spec 10). Dates are fixed
+// around Wednesday 11 Nov 2026 and built in local time, so results don't depend on today or time zone.
+function runSelfTest() {
+  const results = [];
+  const test = (name, fn) => {
+    try {
+      fn();
+      results.push({ name, pass: true, detail: '' });
+    } catch (e) {
+      results.push({ name, pass: false, detail: (e instanceof UserError ? 'Refused: ' : '') + ((e && e.message) || String(e)) });
+    }
+  };
+  const check = (cond, msg) => { if (!cond) throw new Error(msg); };
+  const eq = (actual, expected, label) => {
+    if (!deepEqual(actual, expected)) throw new Error(label + ': expected ' + JSON.stringify(expected) + ', got ' + JSON.stringify(actual));
+  };
+  const refuses = (fn, label) => {
+    let threw = null;
+    try { fn(); } catch (e) { threw = e; }
+    if (!threw) throw new Error(label + ': expected a refusal, but it was accepted');
+    if (!(threw instanceof UserError)) throw new Error(label + ': expected a refusal, got an error: ' + threw.message);
+  };
+  const NOW = new Date(2026, 10, 11, 12, 0, 0);          // Wednesday 11 Nov 2026, local noon
+  const CUR = '2026-11-09';                               // its week, starting Monday
+  const PREV = '2026-11-02';
+  const at = s => { const p = parseYMD(s); return new Date(p.y, p.m - 1, p.d, 12, 0, 0); };
+  const run = (doc, name, payload, now) => runAction(doc, name, payload, now || NOW);
+  const withGoals = n => {
+    let d = defaultDoc(NOW);
+    const ids = [];
+    for (let i = 1; i <= n; i += 1) {
+      const r = run(d, 'addGoal', { title: 'Goal ' + i });
+      d = r.doc;
+      ids.push(r.result.goalId);
+    }
+    return { d, ids };
+  };
+  const goal = (d, id) => goalById(d, id);
+  const pushDone = (d, weekKey, answers) => {
+    d.checkins.push({
+      id: newId(), weekKey, startedAt: isoNow(NOW), completedAt: isoNow(NOW),
+      items: Object.keys(answers).map(id => ({ goalId: id, progress: answers[id], note: '', nextAction: null })),
+      focusGoalIds: [],
+    });
+  };
+  const demo = () => makeDemoDoc(NOW);
+  const breaks = (mutate, fragment) => {
+    const d = demo();
+    mutate(d);
+    const errs = validate(d);
+    check(errs.some(e => e.indexOf(fragment) !== -1), 'expected a problem containing "' + fragment + '", got ' + (errs.length ? errs.join(' | ') : 'none'));
+  };
+
+  /* ---- Dates (spec tests 1-4) ---- */
+  test('1. Today uses the device date, even just after midnight', () => {
+    eq(todayLocal(new Date(2026, 10, 9, 0, 10)), '2026-11-09', 'todayLocal at 00:10');
+  });
+  test('2. Week start for every weekday, Monday and Sunday starts', () => {
+    for (let i = 0; i < 7; i += 1) {
+      const day = addDays('2026-11-09', i);
+      eq(weekStart(day, 1), '2026-11-09', 'Monday start for ' + day);
+      eq(weekStart(day, 0), i === 6 ? '2026-11-15' : '2026-11-08', 'Sunday start for ' + day);
+    }
+    eq(weekStart('2027-01-01', 1), '2026-12-28', '1 Jan 2027');
+  });
+  test('3. Adding days across year ends and leap days', () => {
+    eq(addDays('2026-12-31', 1), '2027-01-01', '31 Dec 2026 + 1');
+    eq(addDays('2028-02-28', 1), '2028-02-29', '28 Feb 2028 + 1');
+    eq(addDays('2027-02-28', 1), '2027-03-01', '28 Feb 2027 + 1');
+    eq(diffDays('2026-11-09', '2026-11-11'), 2, 'days between');
+  });
+  test('4. Impossible dates are rejected', () => {
+    ['2026-02-30', '2026-13-01', '26-1-1', ''].forEach(s => check(parseYMD(s) === null, '"' + s + '" was accepted'));
+    check(parseYMD('2028-02-29') !== null, '29 Feb 2028 was rejected');
+    check(!isYM('2026-13') && isYM('2026-12'), 'month check');
+  });
+
+  /* ---- Rules (spec test 5) ---- */
+  test('5a. Empty and demo data pass every rule', () => {
+    eq(validate(defaultDoc(NOW)), [], 'empty data');
+    eq(validate(demo()), [], 'demo data');
+  });
+  test('5b. Rule 1: repeated ids are caught', () => breaks(d => { d.changes[0].id = d.goals[0].id; }, 'repeats id'));
+  test('5c. Rule 2: links to missing goals are caught', () => {
+    breaks(d => { d.changes[0].goalId = 'missing'; }, 'points to a goal that does not exist');
+    breaks(d => { d.checkins[0].items[0].goalId = 'missing'; }, 'points to a goal that does not exist');
+    breaks(d => { d.checkins[0].focusGoalIds = ['missing']; }, 'has a focus goal that does not exist');
+  });
+  test('5d. Rule 3: focus only on active goals, at most three', () => {
+    breaks(d => { d.goals[4].inFocus = true; }, 'is in focus but not active');
+    breaks(d => { d.goals[3].inFocus = true; }, 'More than 3 goals are in focus');
+  });
+  test('5e. Rule 4: revisit dates only on parked goals', () => breaks(d => { d.goals[0].revisitOn = '2026-12-01'; }, 'has a revisit date but is not parked'));
+  test('5f. Rule 5: one current milestone, none on closed goals', () => {
+    breaks(d => { d.goals[0].milestones[0].status = 'current'; }, 'more than one current milestone');
+    breaks(d => { d.goals[5].milestones[0].status = 'current'; }, 'closed but still has a current milestone');
+  });
+  test('5g. Rule 6: one check-in per week, starting on the right day', () => {
+    breaks(d => { d.checkins[1].weekKey = d.checkins[0].weekKey; }, 'repeats the week of');
+    breaks(d => { d.checkins[0].weekKey = addDays(d.checkins[0].weekKey, 1); }, 'does not start on the chosen first day');
+  });
+  test('5h. Rule 7: one draft at a time, finished check-ins fully answered', () => {
+    breaks(d => { d.checkins[0].completedAt = null; d.checkins[1].completedAt = null; }, 'more than one draft');
+    breaks(d => { d.checkins[0].items[0].progress = null; }, 'unanswered in a finished check-in');
+  });
+  test('5i. Rule 8: wrong values and impossible dates are caught', () => {
+    breaks(d => { d.goals[0].status = 'paused'; }, 'unknown status');
+    breaks(d => { d.goals[0].targetMonth = '2026-13'; }, 'targetMonth must be');
+    breaks(d => { d.goals[0].milestones[1].dueDate = '2026-02-30'; }, 'dueDate must be a date');
+    breaks(d => { d.settings.weekStartsOn = 7; }, 'weekStartsOn must be 0 to 6');
+  });
+
+  /* ---- Goals, status and milestones (spec tests 6-8) ---- */
+  test('6. Editing: no change and spaces add nothing, two fields make one entry, minor is kept', () => {
+    const { d, ids } = withGoals(1);
+    const g = ids[0];
+    const base = d.changes.length;
+    check(!run(d, 'editGoal', { goalId: g, title: 'Goal 1', why: '', doneLooksLike: '', targetMonth: null }).changed, 'saving without changes changed the data');
+    check(!run(d, 'editGoal', { goalId: g, title: '  Goal 1  ', why: '   ', doneLooksLike: '', targetMonth: '' }).changed, 'spaces only changed the data');
+    const two = run(d, 'editGoal', { goalId: g, title: 'Goal one', why: 'Because', doneLooksLike: '', targetMonth: null }).doc;
+    eq(two.changes.length, base + 1, 'history entries');
+    const last = two.changes[two.changes.length - 1];
+    eq([last.kind, last.diffs.map(x => x.field)], ['edited', ['title', 'why']], 'entry');
+    const minor = run(two, 'editGoal', { goalId: g, title: 'Goal one', why: 'Because', doneLooksLike: 'Done', targetMonth: null, minor: true }).doc;
+    check(minor.changes[minor.changes.length - 1].minor === true, 'minor flag not stored');
+  });
+  test('7a. Parking needs a reason and a future revisit date, and clears focus', () => {
+    let { d, ids } = withGoals(2);
+    d = run(d, 'setFocus', { goalId: ids[0], on: true }).doc;
+    refuses(() => run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: '  ' }), 'parking without a reason');
+    refuses(() => run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Exams first', revisitOn: '2026-11-11' }), 'revisit date of today');
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Exams first', revisitOn: '2026-12-01' }).doc;
+    const g = goal(d, ids[0]);
+    eq([g.status, g.inFocus, g.revisitOn], ['parked', false, '2026-12-01'], 'parked goal');
+  });
+  test('7b. Reactivating clears the revisit date and moves the goal last', () => {
+    let { d, ids } = withGoals(3);
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later', revisitOn: '2026-12-01' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'active' }).doc;
+    const g = goal(d, ids[0]);
+    eq([g.status, g.revisitOn, d.goals[d.goals.length - 1].id], ['active', null, ids[0]], 'reactivated goal');
+    eq(d.changes[d.changes.length - 1].diffs, [{ field: 'status', from: 'parked', to: 'active' }, { field: 'revisitOn', from: '2026-12-01', to: null }], 'history entry');
+  });
+  test('7c. A 13th active goal is refused, when adding or reactivating', () => {
+    let { d, ids } = withGoals(12);
+    refuses(() => run(d, 'addGoal', { title: 'Goal 13' }), 'adding a 13th');
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Room' }).doc;
+    d = run(d, 'addGoal', { title: 'Goal 13' }).doc;
+    refuses(() => run(d, 'setStatus', { goalId: ids[0], to: 'active' }), 'reactivating a 13th');
+  });
+  test('7d. A fourth focus goal is refused unless one is swapped out', () => {
+    let { d, ids } = withGoals(4);
+    for (let i = 0; i < 3; i += 1) d = run(d, 'setFocus', { goalId: ids[i], on: true }).doc;
+    refuses(() => run(d, 'setFocus', { goalId: ids[3], on: true }), 'a fourth focus goal');
+    d = run(d, 'setFocus', { goalId: ids[3], on: true, replaceGoalId: ids[0] }).doc;
+    eq(focusGoals(d).map(g => g.id), [ids[1], ids[2], ids[3]], 'focus after the swap');
+  });
+  test('7e. Achieving closes the current milestone; dropping needs a reason', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'addMilestone', { goalId: ids[0], text: 'Step one' }).doc;
+    refuses(() => run(d, 'setStatus', { goalId: ids[0], to: 'dropped' }), 'dropping without a reason');
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'achieved' }).doc;
+    const g = goal(d, ids[0]);
+    check(g.closedAt !== null && g.milestones[0].status === 'done' && g.milestones[0].closedAt !== null, 'milestone not closed on achieve');
+  });
+  test('8. Milestones: one current, done sets closedAt, replace keeps the old one', () => {
+    let { d, ids } = withGoals(1);
+    const g = ids[0];
+    const first = run(d, 'addMilestone', { goalId: g, text: 'First' });
+    d = first.doc;
+    refuses(() => run(d, 'addMilestone', { goalId: g, text: 'Second' }), 'a second current milestone');
+    d = run(d, 'completeMilestone', { goalId: g, milestoneId: first.result.milestoneId }).doc;
+    const m1 = goal(d, g).milestones[0];
+    check(m1.status === 'done' && isISO(m1.closedAt), 'the done milestone has no closedAt');
+    const third = run(d, 'addMilestone', { goalId: g, text: 'Third' });
+    d = run(third.doc, 'replaceMilestone', { goalId: g, milestoneId: third.result.milestoneId, text: 'Fourth' }).doc;
+    eq(goal(d, g).milestones.map(m => m.text + ':' + m.status), ['First:done', 'Third:dropped', 'Fourth:current'], 'milestones');
+    eq(d.changes[d.changes.length - 1].kind, 'milestone-replaced', 'history kind');
+  });
+  test('8b. Repeated submits change nothing the second time', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'addGoal', { id: 'fixed-goal-id', title: 'Once' }).doc;
+    check(!run(d, 'addGoal', { id: 'fixed-goal-id', title: 'Once' }).changed, 'goal added twice');
+    d = run(d, 'addMilestone', { goalId: 'fixed-goal-id', id: 'fixed-milestone-id', text: 'Step' }).doc;
+    check(!run(d, 'addMilestone', { goalId: 'fixed-goal-id', id: 'fixed-milestone-id', text: 'Step' }).changed, 'milestone added twice');
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later' }).doc;
+    check(!run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later' }).changed, 'parked twice');
+    d = run(d, 'deleteGoal', { goalId: 'fixed-goal-id' }).doc;
+    check(!run(d, 'deleteGoal', { goalId: 'fixed-goal-id' }).changed, 'deleted twice');
+  });
+  test('8c. Titles are cleaned and checked', () => {
+    const d = defaultDoc(NOW);
+    const r = run(d, 'addGoal', { title: '  Line one\nline two  ' });
+    eq(goal(r.doc, r.result.goalId).title, 'Line one line two', 'flattened title');
+    refuses(() => run(d, 'addGoal', { title: '   ' }), 'a blank title');
+    refuses(() => run(d, 'addGoal', { title: 'x'.repeat(81) }), 'an 81-character title');
+  });
+
+  /* ---- Check-ins (spec tests 9-13) ---- */
+  test('9. Check-in: one draft per start, every answer needed, a second Finish is harmless', () => {
+    let { d, ids } = withGoals(2);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    check(!run(d, 'startCheckin', { weekKey: CUR }).changed, 'a second start changed the data');
+    eq(d.checkins.length, 1, 'check-ins after two starts');
+    refuses(() => run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }), 'finishing with unanswered goals');
+    ids.forEach(id => { d = run(d, 'answerItem', { weekKey: CUR, goalId: id, progress: 'yes' }).doc; });
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }).doc;
+    const again = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] });
+    check(!again.changed && again.result.alreadyDone === true, 'a second Finish was not harmless');
+    eq(d.checkins.filter(c => c.completedAt !== null).length, 1, 'finished check-ins');
+    refuses(() => run(d, 'startCheckin', { weekKey: CUR }), 'a second check-in for the same week');
+  });
+  test('9b. Check-ins only for this week or last week, one draft at a time', () => {
+    let { d } = withGoals(1);
+    refuses(() => run(d, 'startCheckin', { weekKey: '2026-10-26' }), 'two weeks ago');
+    refuses(() => run(d, 'startCheckin', { weekKey: '2026-11-16' }), 'next week');
+    d = run(d, 'startCheckin', { weekKey: PREV }).doc;
+    refuses(() => run(d, 'startCheckin', { weekKey: CUR }), 'a second draft');
+    refuses(() => run(defaultDoc(NOW), 'startCheckin', { weekKey: CUR }), 'no active goals');
+  });
+  test('10. Finish copies only edited next actions; an older week changes no goal', () => {
+    let { d, ids } = withGoals(2);
+    d = run(d, 'setNextAction', { goalId: ids[0], nextAction: 'Old A' }).doc;
+    d = run(d, 'setNextAction', { goalId: ids[1], nextAction: 'Old B' }).doc;
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes', nextAction: 'New A' }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[1], progress: 'no' }).doc;
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [ids[1]] }).doc;
+    eq([goal(d, ids[0]).nextAction, goal(d, ids[1]).nextAction], ['New A', 'Old B'], 'next actions');
+    eq([goal(d, ids[0]).inFocus, goal(d, ids[1]).inFocus], [false, true], 'focus');
+    const goalsBefore = JSON.stringify(d.goals);
+    d = run(d, 'startCheckin', { weekKey: PREV }).doc;
+    ids.forEach(id => { d = run(d, 'answerItem', { weekKey: PREV, goalId: id, progress: 'yes', nextAction: 'Older' }).doc; });
+    d = run(d, 'finishCheckin', { weekKey: PREV, focusGoalIds: [ids[0]] }).doc;
+    eq(JSON.stringify(d.goals), goalsBefore, 'goals after finishing the older week');
+  });
+  test('10b. A check-in dated in the future does not block later updates', () => {
+    let { d, ids } = withGoals(1);
+    const wrongClock = new Date(2026, 11, 8, 12, 0, 0);    // Tuesday 8 Dec 2026
+    d = run(d, 'startCheckin', { weekKey: '2026-12-07' }, wrongClock).doc;
+    d = run(d, 'answerItem', { weekKey: '2026-12-07', goalId: ids[0], progress: 'no' }, wrongClock).doc;
+    d = run(d, 'finishCheckin', { weekKey: '2026-12-07', focusGoalIds: [] }, wrongClock).doc;
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes', nextAction: 'Fixed clock' }).doc;
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [ids[0]] }).doc;
+    eq([goal(d, ids[0]).nextAction, goal(d, ids[0]).inFocus], ['Fixed clock', true], 'goal after the real week');
+    check(isLatestCompleted(d, CUR, NOW), 'the future check-in still counts as the latest');
+  });
+  test('11. Default week: last week early on if unfinished, otherwise this week', () => {
+    let { d, ids } = withGoals(1);
+    eq(defaultCheckinWeek(d, at('2026-11-09')), PREV, 'Monday');
+    eq(defaultCheckinWeek(d, at('2026-11-11')), PREV, 'Wednesday');
+    eq(defaultCheckinWeek(d, at('2026-11-12')), CUR, 'Thursday');
+    const mon = at('2026-11-09');
+    d = run(d, 'startCheckin', { weekKey: PREV }, mon).doc;
+    d = run(d, 'answerItem', { weekKey: PREV, goalId: ids[0], progress: 'yes' }, mon).doc;
+    d = run(d, 'finishCheckin', { weekKey: PREV, focusGoalIds: [] }, mon).doc;
+    eq(defaultCheckinWeek(d, mon), CUR, 'Monday after finishing last week');
+  });
+  test('12. Reconcile after parking a goal and adding one mid-check-in', () => {
+    let { d, ids } = withGoals(3);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[1], to: 'parked', reason: 'Later' }).doc;
+    const added = run(d, 'addGoal', { title: 'Added mid-check-in' });
+    d = run(added.doc, 'reconcileDraft', { weekKey: CUR }).doc;
+    eq(checkinByWeek(d, CUR).items.map(it => it.goalId).sort(), [ids[0], ids[2], added.result.goalId].sort(), 'goals in the check-in');
+    eq(nextStepGoalId(d, checkinByWeek(d, CUR)), ids[2], 'next step');
+  });
+  test('13. Stalled after three "no" answers; gaps and other check-ins do not reset it', () => {
+    const mk = weeks => {
+      const { d, ids } = withGoals(2);
+      weeks.forEach(([wk, p]) => pushDone(d, wk, p === null ? { [ids[1]]: 'yes' } : { [ids[0]]: p, [ids[1]]: 'yes' }));
+      eq(validate(d), [], 'test data');
+      return isStalled(d, ids[0], NOW);
+    };
+    check(mk([['2026-10-19', 'no'], ['2026-10-26', 'no'], [PREV, 'no']]) === true, 'no, no, no should be stalled');
+    check(mk([['2026-10-19', 'no'], ['2026-10-26', 'no'], [PREV, 'some']]) === false, 'no, no, a bit should not be stalled');
+    check(mk([['2026-10-12', 'no'], ['2026-10-19', 'no'], [PREV, 'no']]) === true, 'a week without a check-in should not reset it');
+    check(mk([['2026-10-12', 'no'], ['2026-10-19', 'no'], ['2026-10-26', null], [PREV, 'no']]) === true, 'a check-in without the goal should not reset it');
+    check(mk([['2026-10-19', 'no'], ['2026-10-26', null], [PREV, 'no']]) === false, 'a check-in without the goal should not count as "no"');
+    check(mk([['2026-10-19', 'no'], ['2026-10-26', 'no'], [PREV, 'no'], ['2026-12-07', 'yes']]) === true, 'a future-dated check-in should be ignored');
+  });
+  test('13b. The stall prompt comes on the third "no", and Keep going snoozes it', () => {
+    const { d, ids } = withGoals(1);
+    pushDone(d, '2026-10-26', { [ids[0]]: 'no' });
+    check(!shouldPromptStall(d, ids[0], PREV, 'no'), 'prompted on only the second "no"');
+    pushDone(d, PREV, { [ids[0]]: 'no' });
+    check(shouldPromptStall(d, ids[0], CUR, 'no'), 'no prompt on the third "no"');
+    check(!shouldPromptStall(d, ids[0], CUR, 'some'), 'prompted on "a bit"');
+    const snoozed = run(d, 'snoozeStall', { goalId: ids[0], weekKey: CUR }).doc;
+    eq(goal(snoozed, ids[0]).staleSnoozeUntil, '2026-11-30', 'snooze date');
+    check(!shouldPromptStall(snoozed, ids[0], '2026-11-16', 'no'), 'prompted while snoozed');
+  });
+
+  /* ---- Delete, backups, ids, text (spec tests 14-17) ---- */
+  test('14. Deleting a goal removes every trace and leaves valid data', () => {
+    const d0 = demo();
+    const id = d0.goals[0].id;
+    const d = run(d0, 'deleteGoal', { goalId: id }).doc;
+    eq(validate(d), [], 'rules after the delete');
+    check(!goalById(d, id), 'the goal is still there');
+    check(!d.changes.some(c => c.goalId === id), 'history left behind');
+    check(!d.checkins.some(c => c.items.some(it => it.goalId === id) || c.focusGoalIds.includes(id)), 'check-in traces left behind');
+  });
+  test('15. A backup round trip returns the same data', () => {
+    const d = demo();
+    check(deepEqual(parseBackupText(exportText(d, NOW)), d), 'the imported data differs from the original');
+    eq(backupFileName(NOW), 'compass-backup-2026-11-11.json', 'file name');
+  });
+  test('15b. Import refuses bad backups', () => {
+    const base = demo();
+    const variant = mutate => { const o = clone(base); mutate(o); return JSON.stringify(o); };
+    refuses(() => parseBackupText('not json'), 'not JSON');
+    refuses(() => parseBackupText(variant(o => { o.app = 'other'; })), 'another app');
+    refuses(() => parseBackupText(variant(o => { o.goals[0].status = 'paused'; })), 'an unknown status');
+    refuses(() => parseBackupText(variant(o => { o.changes[0].goalId = 'missing'; })), 'a link to a missing goal');
+    refuses(() => parseBackupText(variant(o => { o.changes[0].id = o.goals[0].id; })), 'a repeated id');
+    refuses(() => parseBackupText(variant(o => { o.checkins[1].weekKey = o.checkins[0].weekKey; })), 'a repeated week');
+    refuses(() => parseBackupText(variant(o => { o.schemaVersion = SCHEMA_VERSION + 1; })), 'a newer format');
+  });
+  test('16. Ids stay unique with and without crypto.randomUUID', () => {
+    const c = typeof crypto !== 'undefined' ? crypto : null;
+    const gens = [
+      ['with randomUUID', makeIdGen(c)],
+      ['without randomUUID', makeIdGen(c && c.getRandomValues ? { getRandomValues: a => c.getRandomValues(a) } : null)],
+      ['without crypto', makeIdGen(null)],
+    ];
+    gens.forEach(([label, gen]) => {
+      const seen = new Set();
+      for (let i = 0; i < 1000; i += 1) seen.add(gen());
+      check(seen.size === 1000, label + ': ' + (1000 - seen.size) + ' repeated ids');
+    });
+    if (c && c.getRandomValues) check(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(gens[1][1]()), 'id format without randomUUID');
+  });
+  test('17. Text that looks like HTML stays text', () => {
+    const s = '<img src=x onerror=alert(1)>';
+    const n = el('div', null, s);
+    check(n.children.length === 0 && n.textContent === s, 'the text became an element');
+  });
+
+  /* ---- v1.1 fixes and other safety checks ---- */
+  test('18. Repair never crashes and fixes what it safely can', () => {
+    [null, 'x', {}, { goals: [null], changes: [], checkins: [] }, { goals: 'x', changes: [], checkins: [] }].forEach(bad => { repairDoc(bad, NOW); });
+    const d = demo();
+    d.goals[4].inFocus = true;                     // a parked goal in focus
+    d.goals[3].inFocus = true;                     // a fourth focus goal
+    d.goals[0].revisitOn = '2026-12-01';           // a revisit date on an active goal
+    d.goals[0].milestones[0].status = 'current';   // two current milestones
+    d.changes[0].goalId = 'missing';
+    d.checkins[0].focusGoalIds.push('missing');
+    const fixed = repairDoc(d, NOW);
+    eq(validate(fixed), [], 'rules after repair');
+    eq(fixed.goals[0].milestones.map(m => m.status), ['dropped', 'current'], 'kept the newest current milestone');
+  });
+  test('19. Start-up reads empty, unreadable, newer, normal and repairable data correctly', () => {
+    const d = demo();
+    eq(interpretStored(null, NOW).status, 'empty', 'nothing stored');
+    eq(interpretStored('{oops', NOW).status, 'unreadable', 'broken JSON');
+    eq(interpretStored(JSON.stringify({ app: 'other' }), NOW).status, 'unreadable', 'another app');
+    eq(interpretStored(JSON.stringify(Object.assign({}, d, { schemaVersion: SCHEMA_VERSION + 1 })), NOW).status, 'newer', 'a newer format');
+    const ok = interpretStored(JSON.stringify(d), NOW);
+    check(ok.status === 'ok' && !ok.repaired && deepEqual(ok.doc, d), 'normal data');
+    const fixable = clone(d);
+    fixable.goals[4].inFocus = true;
+    const rep = interpretStored(JSON.stringify(fixable), NOW);
+    check(rep.status === 'ok' && rep.repaired && !rep.doc.goals[4].inFocus, 'repairable data');
+    const broken = clone(d);
+    broken.checkins[1].weekKey = broken.checkins[0].weekKey;
+    eq(interpretStored(JSON.stringify(broken), NOW).status, 'unreadable', 'unrepairable data');
+  });
+  test('20. Saves raise the counter; imports land above both', () => {
+    const st = makeStore(memoryBackend(0), 'local');
+    let d = st.save(defaultDoc(NOW)).doc;
+    eq(d.rev, 1, 'first save');
+    d = st.save(d).doc;
+    eq(d.rev, 2, 'second save');
+    const low = st.replaceAll(Object.assign(clone(d), { rev: 0 }), NOW, 'test import');
+    eq([low.ok, low.doc && low.doc.rev], [true, 3], 'import with a lower counter');
+    const high = st.replaceAll(Object.assign(clone(d), { rev: 10 }), NOW, 'test import');
+    eq([high.ok, high.doc && high.doc.rev], [true, 11], 'import with a higher counter');
+  });
+  test('21. A stale tab cannot save over newer or erased data', () => {
+    const backend = memoryBackend(0);
+    const a = makeStore(backend, 'local');
+    const b = makeStore(backend, 'local');
+    const d = a.save(defaultDoc(NOW)).doc;
+    eq(b.save(defaultDoc(NOW)).reason, 'conflict', 'a stale tab saving over new data');
+    b.loadedRev = d.rev;
+    check(b.save(d).ok, 'an up-to-date tab could not save');
+    eq(a.save(d).reason, 'conflict', 'the older tab after the other tab saved');
+    a.loadedRev = b.loadedRev;
+    b.eraseAll();
+    eq(a.save(d).reason, 'conflict', 'saving after the data was erased elsewhere');
+  });
+  test('22. When storage is full, safety copies are cleared first', () => {
+    const d0 = defaultDoc(NOW);
+    const d1 = runAction(d0, 'addGoal', { title: 'A goal that makes the data bigger' }, NOW).doc;
+    const fill = 'x'.repeat(200);
+    const safetyLen = KEYS.safety.length + JSON.stringify([{ at: isoNow(NOW), reason: 'filler', raw: fill }]).length;
+    const d1Len = KEYS.data.length + JSON.stringify(Object.assign({}, d1, { rev: 2 })).length;
+    const st = makeStore(memoryBackend(d1Len + safetyLen - 1), 'local');
+    check(st.save(d0).ok, 'the first save failed');
+    check(st.takeSafetyCopy(fill, 'filler', NOW), 'the safety copy did not fit');
+    const saved = st.save(d1);
+    eq([saved.ok, st.mode, st.safetyCopies().length, revOfText(st.readRaw()).rev], [true, 'local', 0, 2], 'a save that only fits without the safety copy');
+  });
+  test('23. A save that cannot fit keeps the data in memory and says so', () => {
+    const d0 = defaultDoc(NOW);
+    const d0Len = KEYS.data.length + JSON.stringify(Object.assign({}, d0, { rev: 1 })).length;
+    const st = makeStore(memoryBackend(d0Len), 'local');
+    check(st.save(d0).ok, 'the first save failed');
+    const big = runAction(d0, 'addGoal', { title: 'Too big to fit' }, NOW).doc;
+    const saved = st.save(big);
+    eq([saved.ok, st.mode, revOfText(st.readRaw()).rev], [true, 'memory', 2], 'a save that cannot fit');
+    check(st.memoryReason.indexOf('the last save failed') === 0, 'no reason given for memory mode');
+  });
+  test('24. A failed import leaves the current data exactly as it was', () => {
+    const st = makeStore(memoryBackend(3000), 'local');
+    check(st.save(defaultDoc(NOW)).ok, 'the first save failed');
+    const before = st.readRaw();
+    const result = st.replaceAll(demo(), NOW, 'test import');
+    eq([result.ok, result.reason, st.readRaw() === before, st.mode], [false, 'full', true, 'local'], 'after a failed import');
+  });
+  test('25. Old editor drafts and drafts for deleted goals are cleared', () => {
+    const { d, ids } = withGoals(1);
+    const st = makeStore(memoryBackend(0), 'local');
+    st.setDraft(ids[0], { title: 'Recent' }, NOW);
+    st.setDraft('deleted-goal', { title: 'Gone' }, NOW);
+    st.setDraft(null, { title: 'Old new goal' }, new Date(NOW.getTime() - 15 * DAY_MS));
+    st.cleanupDrafts(d, NOW);
+    eq(st.draftKeys(), [st.draftKey(ids[0])], 'drafts left');
+    st.setDraft(null, { title: 'Fresh new goal' }, NOW);
+    st.cleanupDrafts(d, NOW);
+    eq(st.draftKeys().length, 2, 'a fresh new-goal draft was removed');
+  });
+  test('26. Reordering skips goals that are not active', () => {
+    let { d, ids } = withGoals(3);
+    d = run(d, 'setStatus', { goalId: ids[1], to: 'parked', reason: 'Later' }).doc;
+    d = run(d, 'moveGoal', { goalId: ids[2], direction: 'up' }).doc;
+    eq(d.goals.map(g => g.id), [ids[2], ids[1], ids[0]], 'order after moving up');
+    check(!run(d, 'moveGoal', { goalId: ids[2], direction: 'up' }).changed, 'moved past the top');
+  });
+  test('27. Editing a finished check-in: this week or last only, no side effects', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes' }).doc;
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }).doc;
+    const goalsBefore = JSON.stringify(d.goals);
+    d = run(d, 'editCheckin', { weekKey: CUR, items: [{ goalId: ids[0], progress: 'no', note: 'Changed my mind' }] }).doc;
+    const it = checkinByWeek(d, CUR).items[0];
+    eq([it.progress, it.note], ['no', 'Changed my mind'], 'edited answer');
+    eq(JSON.stringify(d.goals), goalsBefore, 'goals after editing');
+    refuses(() => run(d, 'editCheckin', { weekKey: CUR, items: [] }, at('2026-11-25')), 'editing a check-in from two weeks back');
+  });
+  test('28. The week start locks once a check-in exists', () => {
+    let { d } = withGoals(1);
+    d = run(d, 'updateSettings', { weekStartsOn: '0', staleAfter: '4' }).doc;
+    eq([d.settings.weekStartsOn, d.settings.staleAfter], [0, 4], 'settings given as text');
+    d = run(d, 'updateSettings', { weekStartsOn: 1 }).doc;
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    refuses(() => run(d, 'updateSettings', { weekStartsOn: 0 }), 'changing the week start');
+    refuses(() => run(d, 'updateSettings', { staleAfter: 9 }), 'a stall limit out of range');
+  });
+  test('29. Finish refuses an empty check-in and a focus pick that is no longer active', () => {
+    let { d, ids } = withGoals(2);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    ids.forEach(id => { d = run(d, 'answerItem', { weekKey: CUR, goalId: id, progress: 'yes' }).doc; });
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later' }).doc;
+    refuses(() => run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [ids[0]] }), 'focus on a parked goal');
+    const one = withGoals(1);
+    let e = run(one.d, 'startCheckin', { weekKey: CUR }).doc;
+    e = run(e, 'setStatus', { goalId: one.ids[0], to: 'parked', reason: 'Later' }).doc;
+    refuses(() => run(e, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }), 'an empty check-in');
+  });
+  test('30. A note saved after Finish is ignored', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes' }).doc;
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }).doc;
+    check(!run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], note: 'Late' }).changed, 'a late note changed a finished check-in');
+  });
+  test('31. Demo data reads correctly: revisits, weekly cells, focus, stalls', () => {
+    const d = demo();
+    eq(revisitsDue(d, NOW).map(g => g.title), ['Learn conversational Spanish'], 'revisits due');
+    eq([cellState(d, d.goals[0].id, PREV), cellState(d, d.goals[4].id, PREV), cellState(d, d.goals[0].id, CUR)], ['yes', 'excluded', 'none'], 'weekly cells');
+    eq(focusGoals(d).length, 3, 'focus goals');
+    check(isStalled(d, d.goals[2].id, NOW) && !isStalled(d, d.goals[0].id, NOW), 'stalled goals');
+  });
+
+  return results;
+}
+
+/* =============================== BOOT =============================== */
+// Start-up (spec 7): read the address flags, pick the storage, load, clean up, listen, draw.
+// Flags: ?demo=1 sample data in memory, ?memory=1 forces the not-saving mode, ?selftest=1 runs the tests.
+function boot() {
+  const now = new Date();
+  const params = new URLSearchParams(location.search);
+  const flag = name => params.get(name) === '1';
+  ensureToast();
+  if (flag('demo')) {
+    APP.demo = true;
+    APP.store = makeStore(memoryBackend(0), 'demo');      // demo never probes or touches real storage
+    APP.doc = APP.store.save(makeDemoDoc(now)).doc;
+    APP.boot = { status: 'demo', problems: [], migrated: false, repaired: false };
+  } else {
+    if (flag('memory')) {
+      APP.store = makeStore(memoryBackend(0), 'memory');
+      APP.store.memoryReason = 'test mode is on (?memory=1).';
+    } else {
+      const probe = probeLocalStorage();
+      if (probe.ok) APP.store = makeStore(probe.backend, 'local');
+      else {
+        APP.store = makeStore(memoryBackend(0), 'memory');
+        APP.store.memoryReason = 'this browser is blocking storage for this page (' + probe.reason + ').';
+      }
+    }
+    loadData(now);
+    if (APP.store.mode === 'local' && APP.doc) APP.store.cleanupDrafts(APP.doc, now);   // only when data loaded properly
+    checkPersistence();
+  }
+  syncDepth();
+  window.addEventListener('hashchange', onRouteChange);
+  window.addEventListener('storage', e => { if (e.key === KEYS.data || e.key === null) syncFromStorage(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncFromStorage(); });
+  window.addEventListener('pageshow', e => { if (e.persisted) syncFromStorage(); });
+  if (flag('selftest')) APP.selftest = runSelfTest();
+  render();
+}
+
+try {
+  boot();
+} catch (e) {
+  console.error(e);
+  const root = document.getElementById('app');
+  if (root) {
+    root.textContent = '';
+    root.appendChild(document.createTextNode('Compass could not start. Your saved data was not changed. Details: ' + ((e && (e.stack || e.message)) || e)));
+  }
+}
+</script>
+</body>
+</html>
