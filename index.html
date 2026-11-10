@@ -3908,6 +3908,193 @@ try {
     root.appendChild(document.createTextNode('Compass could not start. Your saved data was not changed. Details: ' + ((e && (e.stack || e.message)) || e)));
   }
 }
+  /* =============================== FIX PACK 1 =============================== */
+// Goes at the very end of the code, after the BOOT section. A function declared here replaces the earlier
+// one with the same name. The block at the bottom wraps a few screens, then redraws the page.
+
+// 1. Inside an iPhone or iPad Home Screen app an ordinary download can do nothing, or take over the screen
+//    with no way back. There the file goes through the share sheet instead. onSaved runs once the file has
+//    been handed over, so closing the share sheet does not count as a backup.
+function downloadText(filename, text, type, onSaved) {
+  const mime = type || 'application/json';
+  const saved = () => { if (typeof onSaved === 'function') onSaved(); };
+  try {
+    if (navigator.standalone === true) {
+      const file = typeof File === 'function' ? new File([text], filename, { type: mime }) : null;
+      if (file && typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file] }).then(saved, e => {
+          if (!e || e.name !== 'AbortError') toast('Sharing did not work here. Use "Copy as text" instead.');
+        });
+      } else {
+        toast('Files cannot be saved from the Home Screen app here. Use "Copy as text" instead.');
+      }
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([text], { type: mime }));
+    const a = el('a', { href: url, download: filename, style: 'display:none' });
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 10000);
+    saved();
+  } catch (e) {
+    showError(e);
+  }
+}
+function exportCard(d) {
+  const host = el('div');
+  const inHomeScreenApp = navigator.standalone === true;
+  const last = el('p', { class: 'small muted' }, d.settings.lastExportAt ? 'Last backup: ' + fmtStamp(d.settings.lastExportAt) : 'No backup yet.');
+  const done = () => { if (commit('markExported', {}, { quiet: true }) !== null) last.textContent = 'Last backup: just now. Check that the file arrived where you expected.'; };
+  const buttons = [el('button', {
+    class: 'btn primary', type: 'button',
+    onclick: () => { const now = new Date(); downloadText(backupFileName(now), exportText(APP.doc, now), '', done); },
+  }, inHomeScreenApp ? 'Save backup' : 'Download')];
+  if (canShareFiles() && !inHomeScreenApp) buttons.push(el('button', { class: 'btn', type: 'button', onclick: () => shareBackup(done) }, 'Share'));
+  buttons.push(el('button', { class: 'btn', type: 'button', onclick: () => { copyText(exportText(APP.doc, new Date()), host); done(); } }, 'Copy as text'));
+  return card('Save a backup', [
+    el('p', null, 'One file with all your goals, history and check-ins. Keep it somewhere private, like your phone\'s Files app or Google Drive, and never in your public GitHub repo.'),
+    el('p', { class: 'small muted' }, 'Save a backup before removing Compass from your Home Screen, because removing it may delete its data. Avoid private or incognito windows: they erase everything when closed.'),
+    last,
+    el('div', { class: 'actions' }, buttons),
+    host,
+  ]);
+}
+
+// 2. In your first week there is nothing to review from last week, so the check-in opens this week.
+function weekToOpen(doc, now) {
+  const draft = draftCheckin(doc);
+  if (draft) return draft.weekKey;
+  const cur = currentWeekKey(now, doc.settings.weekStartsOn);
+  const week = defaultCheckinWeek(doc, now);
+  if (week === cur) return cur;
+  const hadGoals = doc.goals.some(g => todayLocal(new Date(g.createdAt)) < cur);
+  return hadGoals ? week : cur;
+}
+function checkinCard(d, ctx) {
+  const draft = draftCheckin(d);
+  const active = activeGoals(d);
+  let text;
+  let link;
+  if (draft) {
+    const answered = active.filter(g => draft.items.some(it => it.goalId === g.id && it.progress !== null)).length;
+    text = 'In progress for ' + weekRange(draft.weekKey, ctx.today) + ': ' + answered + ' of ' + active.length + ' answered.';
+    link = el('a', { class: 'btn primary', href: '#' + checkinPath(draft.weekKey) }, 'Resume check-in');
+  } else {
+    const week = weekToOpen(d, ctx.now);
+    if (d.checkins.some(c => c.weekKey === week && c.completedAt !== null)) {
+      text = 'Done for ' + weekRange(week, ctx.today) + '.';
+      link = el('a', { class: 'btn', href: '#' + checkinPath(week) }, 'See answers');
+    } else {
+      text = 'For ' + weekRange(week, ctx.today) + '. About five minutes: one question per goal, then pick your focus.';
+      link = el('a', { class: 'btn primary', href: '#' + checkinPath(week) }, 'Start check-in');
+    }
+  }
+  return el('section', { class: 'card checkin' }, [el('h2', null, 'Weekly check-in'), el('p', null, text), el('div', { class: 'actions' }, link)]);
+}
+
+// 4. Check-in steps replace each other in the history, so Back leaves the check-in in one step.
+function navigate(path) {
+  const from = currentRoute();
+  const to = routeFor(path);
+  const inFlow = r => r.name === 'checkinStep' || r.name === 'checkinFocus';
+  if (inFlow(from) && inFlow(to) && from.weekKey === to.weekKey) { replaceRoute(path); return; }
+  location.hash = '#' + path;
+}
+
+// 6. Unreadable data is handled by the recovery screen, not reported as "changed in another tab".
+function syncFromStorage() {
+  if (!APP.store || APP.store.mode !== 'local' || APP.store.locked) return;
+  if (APP.store.inSync()) { if (!isFormRoute()) render(); return; }
+  if (isFormRoute()) { APP.conflict = true; renderBanners(); return; }
+  loadData(new Date());
+  render();
+}
+
+(function () {
+  try {
+    // 3. A screen that is redrawn in place keeps its scroll position. A plain #/checkin opens the right week.
+    const baseRender = render;
+    render = function () {
+      if (APP.doc && currentRoute().name === 'checkin') redirectTo(checkinPath(weekToOpen(APP.doc, new Date())));
+      const before = APP.routeName;
+      const y = window.scrollY;
+      baseRender();
+      if (before && before === APP.routeName) window.scrollTo(0, y);
+    };
+
+    // 4. "Previous goal" on check-in steps and on the focus step.
+    const previousButton = (weekKey, goalId) => el('button', { class: 'btn', type: 'button', onclick: () => replaceRoute(stepPath(weekKey, goalId)) }, 'Previous goal');
+    const findButton = (page, label) => Array.from(page.querySelectorAll('button')).find(b => b.textContent === label);
+    const baseStep = PAGES.checkinStep;
+    PAGES.checkinStep = (page, route, ctx) => {
+      baseStep(page, route, ctx);
+      const active = activeGoals(ctx.doc);
+      const i = active.findIndex(g => g.id === route.stepGoalId);
+      const nextBtn = findButton(page, 'Next');
+      if (i > 0 && nextBtn && !findButton(page, 'Previous goal')) nextBtn.insertAdjacentElement('afterend', previousButton(route.weekKey, active[i - 1].id));
+    };
+    const baseFocus = PAGES.checkinFocus;
+    PAGES.checkinFocus = (page, route, ctx) => {
+      baseFocus(page, route, ctx);
+      const active = activeGoals(ctx.doc);
+      const finishBtn = findButton(page, 'Finish check-in');
+      if (active.length && finishBtn && !findButton(page, 'Previous goal')) finishBtn.insertAdjacentElement('afterend', previousButton(route.weekKey, active[active.length - 1].id));
+    };
+
+    // 5. The return key in the title box moves to the next box instead of adding the goal straight away.
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' || e.isComposing || !e.target || e.target.id !== 'f-title') return;
+      const why = document.getElementById('f-why');
+      if (!why) return;
+      e.preventDefault();
+      why.focus();
+    });
+
+    // Diagnostics says the fix pack is in, and the self-test checks it.
+    const baseDiagnostics = PAGES.diagnostics;
+    PAGES.diagnostics = (page, route, ctx) => {
+      baseDiagnostics(page, route, ctx);
+      const heading = page.querySelector('h1');
+      if (heading) heading.insertAdjacentElement('afterend', el('p', { class: 'small muted' }, 'Fix pack 1 is installed.'));
+    };
+    const baseSelfTest = runSelfTest;
+    runSelfTest = function () {
+      const results = baseSelfTest();
+      const extra = (name, fn) => {
+        try { fn(); results.push({ name, pass: true, detail: '' }); }
+        catch (e) { results.push({ name, pass: false, detail: (e && e.message) || String(e) }); }
+      };
+      const NOW = new Date(2026, 10, 11, 12, 0, 0);       // Wednesday 11 Nov 2026, local noon
+      const CUR = '2026-11-09';
+      const PREV = '2026-11-02';
+      const add = (doc, title) => runAction(doc, 'addGoal', { title }, NOW).doc;
+      extra('49. Fix pack: in your first week the check-in opens this week', () => {
+        let d = add(defaultDoc(NOW), 'Goal 1');
+        if (weekToOpen(d, NOW) !== CUR) throw new Error('a goal added this week should open this week, got ' + weekToOpen(d, NOW));
+        d.goals[0].createdAt = new Date(2026, 10, 1, 12, 0, 0).toISOString();   // a goal from before this week
+        if (weekToOpen(d, NOW) !== PREV) throw new Error('an older goal early in the week should open last week, got ' + weekToOpen(d, NOW));
+        d = runAction(d, 'startCheckin', { weekKey: CUR }, NOW).doc;
+        if (weekToOpen(d, NOW) !== CUR) throw new Error('an unfinished check-in should come first, got ' + weekToOpen(d, NOW));
+      });
+      extra('50. Fix pack: check-in steps offer "Previous goal" after the first goal', () => {
+        let d = add(add(defaultDoc(NOW), 'Goal 1'), 'Goal 2');
+        d = runAction(d, 'startCheckin', { weekKey: CUR }, NOW).doc;
+        const ctx = { doc: d, store: makeStore(memoryBackend(0), 'memory'), now: NOW, today: todayLocal(NOW) };
+        const draw = path => { const route = routeFor(path); const page = el('main'); PAGES[route.name](page, route, ctx); return page; };
+        const ids = d.goals.map(g => g.id);
+        if (findButton(draw(stepPath(CUR, ids[0])), 'Previous goal')) throw new Error('the first goal should not offer Previous goal');
+        if (!findButton(draw(stepPath(CUR, ids[1])), 'Previous goal')) throw new Error('the second goal should offer Previous goal');
+      });
+      return results;
+    };
+
+    // This block runs after the app has started, so run the self-test again if it ran, and redraw.
+    if (APP.selftest) APP.selftest = runSelfTest();
+    if (document.getElementById('page')) render();
+  } catch (e) {
+    console.error(e);
+  }
+})();
 </script>
 </body>
 </html>
