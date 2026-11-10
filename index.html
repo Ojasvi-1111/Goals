@@ -2698,3 +2698,1216 @@ PAGES.diagnostics = page => {
     page.appendChild(el('section', { class: 'card problem' }, [el('h2', null, 'Last error'), el('div', { class: 'why' }, APP.lastError)]));
   }
 };
+/* Weekly check-in (spec 5.4). Every check-in screen names its week in the address, so a draft and an
+   edit of last week can never be confused (v1.1 fix 6). */
+function isCheckinWeek(d, w) { return isYMD(w) && weekdayOf(w) === d.settings.weekStartsOn; }
+function boardButton() { return el('div', { class: 'actions' }, el('a', { class: 'btn', href: '#/' }, 'Back to the board')); }
+
+// #/checkin on its own is sent to the right week by render(); this page only shows if that cannot happen.
+PAGES.checkin = (page, route, ctx) => {
+  page.appendChild(el('h1', { tabindex: '-1' }, 'Weekly check-in'));
+  page.appendChild(el('div', { class: 'actions' }, el('a', { class: 'btn primary', href: '#' + checkinPath(checkinTargetWeek(ctx.doc, ctx.now)) }, 'Open the check-in')));
+};
+
+PAGES.checkinWeek = (page, route, ctx) => {
+  const d = ctx.doc;
+  const w = route.weekKey;
+  page.appendChild(el('h1', { tabindex: '-1' }, 'Weekly check-in'));
+  if (!isCheckinWeek(d, w)) {
+    page.appendChild(el('p', null, 'That is not a check-in week.'));
+    page.appendChild(boardButton());
+    return;
+  }
+  const cur = currentWeekKey(ctx.now, d.settings.weekStartsOn);
+  const prev = addDays(cur, -7);
+  const c = checkinByWeek(d, w);
+  const draft = draftCheckin(d);
+  page.appendChild(el('p', { class: 'sub' }, 'Week of ' + weekRange(w, ctx.today)));
+  if (c && c.completedAt !== null) {
+    page.appendChild(card('Your answers', checkinSummary(d, c)));
+    page.appendChild(focusCard(d, c));
+    page.appendChild(el('div', { class: 'actions' }, [
+      w === cur || w === prev ? el('a', { class: 'btn', href: '#' + checkinPath(w) + '/edit' }, 'Edit answers') : null,
+      el('a', { class: 'btn', href: '#/' }, 'Back to the board'),
+    ]));
+    return;
+  }
+  if (draft && draft.weekKey !== w) {
+    page.appendChild(el('div', { class: 'notice' }, [
+      el('p', null, 'You have an unfinished check-in for ' + weekRange(draft.weekKey, ctx.today) + '. Finish or discard it first.'),
+      el('div', { class: 'actions' }, el('a', { class: 'btn primary', href: '#' + checkinPath(draft.weekKey) }, 'Go to it')),
+    ]));
+    return;
+  }
+  const due = revisitsDue(d, ctx.now);
+  if (due.length) page.appendChild(revisitCard(due, ctx.today));
+  const active = activeGoals(d);
+  if (c) {
+    const next = nextStepGoalId(d, c);
+    const answered = active.filter(g => c.items.some(it => it.goalId === g.id && it.progress !== null)).length;
+    page.appendChild(el('p', null, answered + ' of ' + active.length + ' goals answered so far.'));
+    page.appendChild(el('div', { class: 'actions' }, [
+      el('a', { class: 'btn primary', href: '#' + stepPath(w, next) }, next ? 'Continue' : 'Choose your focus'),
+      el('button', { class: 'btn danger', type: 'button', onclick: () => confirmDiscard(w) }, 'Discard this check-in'),
+    ]));
+    return;
+  }
+  if (w !== cur && w !== prev) {
+    page.appendChild(el('p', null, 'You can check in for this week or last week only.'));
+    page.appendChild(boardButton());
+    return;
+  }
+  page.appendChild(el('p', null, active.length
+    ? 'One question for each of your ' + active.length + ' active goals, then pick up to ' + MAX_FOCUS + ' to focus on. About five minutes.'
+    : 'You have no active goals. Add one, or reactivate one from the shelf, before checking in.'));
+  page.appendChild(el('div', { class: 'actions' }, el('button', { class: 'btn primary', type: 'button', disabled: !active.length, onclick: () => beginCheckin(w) }, 'Start')));
+  const other = w === cur ? prev : cur;
+  const otherFree = other === prev ? !d.checkins.some(x => x.weekKey === prev && x.completedAt !== null) : !checkinByWeek(d, cur);
+  if (otherFree) page.appendChild(el('p', null, el('a', { href: '#' + checkinPath(other) }, other === prev ? 'Check in for last week instead' : 'Check in for this week instead')));
+};
+function beginCheckin(w) {
+  if (commit('startCheckin', { weekKey: w }, { quiet: true }) === null) return;
+  const c = checkinByWeek(APP.doc, w);
+  navigate(stepPath(w, c ? nextStepGoalId(APP.doc, c) : null));
+}
+function confirmDiscard(w) {
+  openDialog({
+    title: 'Discard this check-in?',
+    text: 'Your answers for ' + weekRange(w, todayLocal(new Date())) + ' will be deleted. Your goals are not changed.',
+    buttons: [
+      { label: 'Keep it' },
+      {
+        label: 'Discard', kind: 'danger',
+        run: () => {
+          if (commit('discardDraft', { weekKey: w }, { quiet: true }) === null) return;
+          toast('Check-in discarded.');
+          replaceRoute('/');
+        },
+      },
+    ],
+  });
+}
+function checkinSummary(d, c) {
+  if (!c.items.length) return el('p', { class: 'muted' }, 'No goals were part of this check-in.');
+  return el('ul', { class: 'plain' }, c.items.map(it => {
+    const g = goalById(d, it.goalId);
+    return el('li', null, [
+      el('div', null, [el('strong', null, g ? g.title : 'A deleted goal'), ' · ' + (PROGRESS_LABEL[it.progress] || 'Not answered')]),
+      it.note ? el('div', { class: 'small multiline' }, it.note) : null,
+    ]);
+  }));
+}
+function focusCard(d, c) {
+  const focus = c.focusGoalIds.map(id => goalById(d, id)).filter(Boolean);
+  return card('Focus', focus.length ? el('ul', { class: 'plain' }, focus.map(g => el('li', null, g.title))) : el('p', { class: 'muted' }, 'No focus goals were picked.'));
+}
+// Parked goals whose revisit date has come: decide now, or leave them parked (spec 5.4).
+function revisitCard(due, today) {
+  return card('Due for a revisit', [
+    el('p', { class: 'small muted' }, 'You asked to look at these again. Decide now, or leave them parked for later.'),
+    el('ul', { class: 'plain' }, due.map(g => {
+      const base = goalPath(g.id);
+      return el('li', null, [
+        el('div', null, el('strong', null, g.title)),
+        el('div', { class: 'small muted' }, 'Revisit was due ' + fmtDay(g.revisitOn, today)),
+        el('div', { class: 'actions' }, [
+          el('a', { class: 'btn primary', href: '#' + base + '/status/reactivate' }, 'Reactivate'),
+          el('a', { class: 'btn', href: '#' + base + '/status/repark' }, 'Keep parked'),
+          el('a', { class: 'btn', href: '#' + base + '/status/drop' }, 'Drop'),
+        ]),
+      ]);
+    })),
+  ]);
+}
+
+// One goal per screen. Each answer saves the moment it is tapped; the note and next action save 0.6 s
+// after you stop typing, and again on Next, on leaving the screen and when the app goes to the background.
+PAGES.checkinStep = (page, route, ctx) => {
+  const d = ctx.doc;
+  const w = route.weekKey;
+  const c = checkinByWeek(d, w);
+  const g = goalById(d, route.stepGoalId);
+  if (!c || c.completedAt !== null || !g || g.status !== 'active') {
+    page.appendChild(el('h1', { tabindex: '-1' }, 'Weekly check-in'));
+    page.appendChild(el('p', null, 'This step is no longer part of the check-in.'));
+    page.appendChild(el('div', { class: 'actions' }, el('a', { class: 'btn primary', href: '#' + checkinPath(w) }, 'Continue')));
+    return;
+  }
+  const active = activeGoals(d);
+  const answered = active.filter(x => c.items.some(it => it.goalId === x.id && it.progress !== null)).length;
+  const it = c.items.find(x => x.goalId === g.id) || { progress: null, note: '', nextAction: null };
+  page.appendChild(el('p', { class: 'small muted' }, 'Goal ' + (active.indexOf(g) + 1) + ' of ' + active.length + ' · ' + answered + ' answered · week of ' + weekRange(w, ctx.today)));
+  page.appendChild(el('h1', { tabindex: '-1' }, g.title));
+  const ms = currentMilestone(g);
+  page.appendChild(kvList([
+    ['Milestone', ms ? milestoneText(ms, ctx.today) : 'None yet'],
+    ['Target', g.targetMonth ? targetText(g.targetMonth, ctx.today) : '—'],
+  ]));
+
+  let progress = it.progress;
+  const stallHost = el('div');
+  const note = el('textarea', { id: 'f-note', class: 'short', maxlength: String(LIMITS.note) });
+  note.value = it.note;
+  const na = el('input', { type: 'text', id: 'f-na', maxlength: String(LIMITS.nextAction), autocomplete: 'off' });
+  na.value = it.nextAction !== null ? it.nextAction : g.nextAction;
+  let naEdited = it.nextAction !== null;
+  let dirty = false;
+  let timer = 0;
+  const saveText = () => {
+    clearTimeout(timer);
+    if (APP.flush === saveText) APP.flush = null;
+    if (!dirty) return true;
+    const p = { weekKey: w, goalId: g.id, note: note.value };
+    if (naEdited) p.nextAction = cleanLine(na.value) === cleanLine(g.nextAction) ? null : na.value;
+    if (commit('answerItem', p, { quiet: true }) === null) return false;
+    dirty = false;
+    return true;
+  };
+  const touched = () => { dirty = true; APP.flush = saveText; clearTimeout(timer); timer = setTimeout(saveText, 600); };
+  note.addEventListener('input', touched);
+  na.addEventListener('input', () => { naEdited = true; touched(); });
+  const showStall = doc => {
+    stallHost.textContent = '';
+    if (progress === 'no' && shouldPromptStall(doc, g.id, w, 'no')) stallHost.appendChild(stallBox(doc, w, g, saveText));
+  };
+  const answers = answerButtons(progress, p => {
+    if (commit('answerItem', { weekKey: w, goalId: g.id, progress: p }, { quiet: true }) === null) return;
+    progress = p;
+    answers.set(p);
+    showStall(APP.doc);
+  });
+  page.appendChild(el('fieldset', { class: 'field' }, [el('legend', null, 'Did this week move it?'), answers.node]));
+  page.appendChild(stallHost);
+  page.appendChild(field('Note (optional)', note, 'A line on what happened this week.'));
+  page.appendChild(field('Next action', na, 'Change it if the next step is different now. It is saved to the goal when you finish.'));
+  const next = () => {
+    if (!progress) { toast('Choose Yes, A bit or No first.'); return; }
+    if (!saveText()) return;
+    const c2 = checkinByWeek(APP.doc, w);
+    navigate(stepPath(w, c2 ? nextStepGoalId(APP.doc, c2) : null));
+  };
+  page.appendChild(el('div', { class: 'actions' }, [
+    el('button', { class: 'btn primary', type: 'button', onclick: () => next() }, 'Next'),
+    el('button', { class: 'btn', type: 'button', onclick: () => { if (saveText()) navigate('/'); } }, 'Save and exit'),
+  ]));
+  showStall(d);
+};
+// The stall prompt (spec 5.5): on the staleAfter-th "no" in a row, four ways forward.
+function stallBox(doc, w, g, beforeLeave) {
+  const base = goalPath(g.id);
+  const go = path => { if (beforeLeave()) navigate(path); };
+  const ms = currentMilestone(g);
+  const box = el('div', { class: 'notice', role: 'status' }, [
+    el('p', null, el('strong', null, 'That is ' + doc.settings.staleAfter + ' "no" answers in a row for this goal.')),
+    el('p', null, 'What would help most?'),
+    el('div', { class: 'actions' }, [
+      el('button', {
+        class: 'btn', type: 'button',
+        onclick: () => {
+          if (commit('snoozeStall', { goalId: g.id, weekKey: w }, { quiet: true }) === null) return;
+          box.remove();
+          toast('Keep going. No more reminders about this for a few weeks.');
+        },
+      }, 'Keep going'),
+      el('button', { class: 'btn', type: 'button', onclick: () => go(base + (ms ? '/milestone/edit' : '/milestone/add')) }, ms ? 'Shrink the milestone' : 'Add a smaller milestone'),
+      el('button', { class: 'btn', type: 'button', onclick: () => go(base + '/status/park') }, 'Park it'),
+      el('button', { class: 'btn', type: 'button', onclick: () => go(base + '/status/drop') }, 'Drop it'),
+    ]),
+  ]);
+  return box;
+}
+
+PAGES.checkinFocus = (page, route, ctx) => {
+  const d = ctx.doc;
+  const w = route.weekKey;
+  const c = checkinByWeek(d, w);
+  page.appendChild(el('h1', { tabindex: '-1' }, 'Focus for the coming week'));
+  if (!c || c.completedAt !== null) {
+    page.appendChild(el('p', null, 'This check-in is already finished.'));
+    page.appendChild(el('div', { class: 'actions' }, el('a', { class: 'btn primary', href: '#' + checkinPath(w) }, 'See answers')));
+    return;
+  }
+  const next = nextStepGoalId(d, c);
+  if (next) {
+    page.appendChild(el('p', null, 'Answer every goal first.'));
+    page.appendChild(el('div', { class: 'actions' }, el('a', { class: 'btn primary', href: '#' + stepPath(w, next) }, 'Go to the next goal')));
+    return;
+  }
+  const active = activeGoals(d);
+  page.appendChild(el('p', { class: 'sub' }, 'Pick up to ' + MAX_FOCUS + '. They show at the top of the board until your next check-in.'));
+  const picks = active.map(g => {
+    const item = c.items.find(x => x.goalId === g.id);
+    const box = el('input', { type: 'checkbox', id: 'fc-' + g.id });
+    box.checked = g.inFocus;
+    return { g, box, label: el('label', { class: 'check' }, [box, g.title + (item && item.progress ? ' · ' + PROGRESS_LABEL[item.progress] : '')]) };
+  });
+  picks.forEach(p => p.box.addEventListener('change', () => {
+    if (p.box.checked && picks.filter(x => x.box.checked).length > MAX_FOCUS) {
+      p.box.checked = false;
+      toast('Up to ' + MAX_FOCUS + ' focus goals. Untick one first.');
+    }
+  }));
+  page.appendChild(active.length ? el('div', { class: 'card' }, picks.map(p => p.label)) : el('p', null, 'No active goals right now, so there is nothing to focus on.'));
+  const finish = el('button', {
+    class: 'btn primary', type: 'button',
+    onclick: () => {
+      const picked = picks.filter(p => p.box.checked).map(p => p.g.id);
+      if (commit('finishCheckin', { weekKey: w, focusGoalIds: picked }, { quiet: true }) === null) return;
+      finish.disabled = true;
+      replaceRoute(checkinPath(w) + '/done');
+    },
+  }, 'Finish check-in');
+  page.appendChild(el('div', { class: 'actions' }, finish));
+};
+
+PAGES.checkinDone = (page, route, ctx) => {
+  const d = ctx.doc;
+  const w = route.weekKey;
+  const c = checkinByWeek(d, w);
+  page.appendChild(el('h1', { tabindex: '-1' }, 'Check-in saved'));
+  if (!c || c.completedAt === null) {
+    page.appendChild(el('p', null, 'This check-in is not finished yet.'));
+    page.appendChild(el('div', { class: 'actions' }, el('a', { class: 'btn primary', href: '#' + checkinPath(w) }, 'Go to the check-in')));
+    return;
+  }
+  page.appendChild(el('p', { class: 'sub' }, 'Week of ' + weekRange(w, ctx.today)));
+  page.appendChild(card('Your answers', checkinSummary(d, c)));
+  page.appendChild(focusCard(d, c));
+  page.appendChild(card('Back up', [
+    el('p', null, 'A backup after each check-in keeps your history safe if this browser ever loses its data.'),
+    el('div', { class: 'actions' }, el('a', { class: 'btn primary', href: '#/settings/backup' }, 'Back up now')),
+  ]));
+  page.appendChild(boardButton());
+};
+
+// Editing a finished check-in from this week or last: one screen with every goal, saved together.
+PAGES.checkinEdit = (page, route, ctx) => {
+  const d = ctx.doc;
+  const w = route.weekKey;
+  const c = checkinByWeek(d, w);
+  page.appendChild(el('h1', { tabindex: '-1' }, 'Edit check-in'));
+  const cur = currentWeekKey(ctx.now, d.settings.weekStartsOn);
+  if (!c || c.completedAt === null || (w !== cur && w !== addDays(cur, -7))) {
+    page.appendChild(el('p', null, 'Only this week\'s and last week\'s finished check-ins can be edited.'));
+    page.appendChild(boardButton());
+    return;
+  }
+  page.appendChild(el('p', { class: 'sub' }, 'Week of ' + weekRange(w, ctx.today) + '. Changes are saved together when you tap Save changes.'));
+  const edits = c.items.map(it => ({ goalId: it.goalId, progress: it.progress, note: it.note }));
+  edits.forEach(e => {
+    const g = goalById(d, e.goalId);
+    const answers = answerButtons(e.progress, p => { e.progress = p; answers.set(p); });
+    const note = el('textarea', { id: 'fe-' + e.goalId, class: 'short', maxlength: String(LIMITS.note), 'aria-label': 'Note for ' + (g ? g.title : 'this goal') });
+    note.value = e.note;
+    note.addEventListener('input', () => { e.note = note.value; });
+    page.appendChild(el('section', { class: 'card' }, [el('h2', null, g ? g.title : 'A deleted goal'), answers.node, note]));
+  });
+  const save = el('button', {
+    class: 'btn primary', type: 'button',
+    onclick: () => {
+      if (commit('editCheckin', { weekKey: w, items: edits }, { quiet: true }) === null) return;
+      save.disabled = true;
+      toast('Check-in updated.');
+      goBack(checkinPath(w));
+    },
+  }, 'Save changes');
+  page.appendChild(el('div', { class: 'actions' }, [save, el('button', { class: 'btn', type: 'button', onclick: () => goBack(checkinPath(w)) }, 'Cancel')]));
+};
+
+/* Insights (spec 6): a heatmap of the last 12 weeks, or fewer when check-ins started more recently.
+   Five symbols keep "no", "skipped week" and "not in that check-in" apart. */
+function insightWeeks(doc, now) {
+  const done = doc.checkins.filter(c => c.completedAt !== null).map(c => c.weekKey).sort();
+  if (!done.length) return [];
+  return weekKeysEnding(currentWeekKey(now, doc.settings.weekStartsOn), 12).filter(w => w >= done[0]);
+}
+function movedStats(doc, goalId, weeks) {
+  let answered = 0;
+  let moved = 0;
+  weeks.forEach(w => {
+    const s = cellState(doc, goalId, w);
+    if (PROGRESS.includes(s)) { answered += 1; if (s !== 'no') moved += 1; }
+  });
+  return { answered, moved };
+}
+PAGES.insights = (page, route, ctx) => {
+  const d = ctx.doc;
+  page.appendChild(el('h1', { tabindex: '-1' }, 'Insights'));
+  const weeks = insightWeeks(d, ctx.now);
+  if (!weeks.length) {
+    page.appendChild(el('div', { class: 'card empty' }, [
+      el('p', null, 'Your first weekly check-in starts this picture.'),
+      el('div', { class: 'actions' }, el('a', { class: 'btn primary', href: '#/checkin' }, 'Go to the check-in')),
+    ]));
+    return;
+  }
+  const goals = activeGoals(d).concat(APP.insightsShelved ? d.goals.filter(g => g.status !== 'active') : []);
+  const toggle = el('input', { type: 'checkbox', id: 'f-shelved' });
+  toggle.checked = APP.insightsShelved;
+  toggle.addEventListener('change', () => { APP.insightsShelved = toggle.checked; render(); });
+  page.appendChild(el('p', { class: 'sub' }, 'The last ' + weeks.length + (weeks.length === 1 ? ' week' : ' weeks') + '. Tap a square to see that week\'s note.'));
+  page.appendChild(el('label', { class: 'check' }, [toggle, 'Include goals on the shelf']));
+  if (!goals.length) { page.appendChild(el('p', null, 'No goals to show.')); return; }
+  const head = el('tr', null, [el('th', { class: 'rowhead', scope: 'col' }, 'Goal')].concat(weeks.map(w => el('th', { scope: 'col' }, fmtYMD(w, { year: undefined })))));
+  const rows = goals.map(g => {
+    const st = movedStats(d, g.id, weeks);
+    return el('tr', null, [
+      el('th', { class: 'rowhead', scope: 'row' }, [
+        el('a', { href: '#' + goalPath(g.id) }, g.title),
+        g.status !== 'active' ? el('span', { class: 'tag' }, STATUS_LABEL[g.status].toLowerCase()) : null,
+        el('div', { class: 'rowstat' }, st.answered ? 'Moved in ' + st.moved + ' of ' + st.answered + (st.answered === 1 ? ' check-in' : ' check-ins') : 'No answers yet'),
+      ]),
+    ].concat(weeks.map(w => {
+      const s = cellState(d, g.id, w);
+      return el('td', null, el('button', {
+        class: 'cellbtn ' + s, type: 'button', 'aria-label': 'Week of ' + fmtDay(w, ctx.today) + ': ' + CELL[s][1],
+        onclick: () => showCell(g.id, w),
+      }, CELL[s][0]));
+    })));
+  });
+  const wrap = el('div', { class: 'heat-wrap' }, el('table', { class: 'heat' }, [el('thead', null, head), el('tbody', null, rows)]));
+  page.appendChild(wrap);
+  page.appendChild(el('p', { class: 'legend' }, '● yes   ◐ a bit   ○ no   · not in that check-in   – no check-in'));
+  requestAnimationFrame(() => { wrap.scrollLeft = wrap.scrollWidth; });   // open at the newest week
+};
+function showCell(goalId, w) {
+  const d = APP.doc;
+  const g = d ? goalById(d, goalId) : null;
+  if (!g) return;
+  const s = cellState(d, goalId, w);
+  const c = d.checkins.find(x => x.weekKey === w && x.completedAt !== null);
+  const item = c ? c.items.find(x => x.goalId === goalId) : null;
+  const what = s === 'none' ? 'No check-in that week.'
+    : s === 'excluded' ? 'This goal was not part of that check-in.'
+      : PROGRESS_LABEL[s] + '. ' + (item && item.note ? 'Note: ' + item.note : 'No note.');
+  openDialog({ title: 'Week of ' + weekRange(w, todayLocal(new Date())), text: g.title + ': ' + what, buttons: [{ label: 'Close' }] });
+}
+
+/* =============================== ROUTER =============================== */
+// Every screen is a hash route (rule 10). form: true marks screens with typing or choices in progress, which
+// are never redrawn on their own (rule 9). nav: true shows the tab bar. back is where Back goes when nothing
+// in the app is behind the screen. noDoc screens still work when the saved data could not be read.
+// goal, week and step give the position of the goal id, the week and the check-in goal in the address.
+const ROUTES = [
+  { name: 'board', pattern: /^\/$/, nav: true, tab: 'board' },
+  { name: 'insights', pattern: /^\/insights$/, nav: true, tab: 'insights' },
+  { name: 'shelf', pattern: /^\/shelf$/, nav: true, tab: 'shelf' },
+  { name: 'reorder', pattern: /^\/reorder$/, back: () => '/' },
+  { name: 'goalNew', pattern: /^\/goal\/new$/, form: true, back: () => '/' },
+  { name: 'goalEdit', pattern: /^\/goal\/([^/]+)\/edit$/, form: true, goal: 0, back: p => goalPath(p[0]) },
+  { name: 'goalStatus', pattern: /^\/goal\/([^/]+)\/status\/(park|drop|achieve|reactivate|repark)$/, form: true, goal: 0, back: p => goalPath(p[0]) },
+  { name: 'goalMilestone', pattern: /^\/goal\/([^/]+)\/milestone\/(add|edit|done|replace)$/, form: true, goal: 0, back: p => goalPath(p[0]) },
+  { name: 'goal', pattern: /^\/goal\/([^/]+)$/, form: true, nav: true, goal: 0, back: () => '/' },
+  { name: 'checkin', pattern: /^\/checkin$/, back: () => '/' },
+  { name: 'checkinWeek', pattern: /^\/checkin\/(\d{4}-\d{2}-\d{2})$/, week: 0, back: () => '/' },
+  { name: 'checkinStep', pattern: /^\/checkin\/(\d{4}-\d{2}-\d{2})\/goal\/([^/]+)$/, form: true, week: 0, step: 1, back: p => checkinPath(p[0]) },
+  { name: 'checkinFocus', pattern: /^\/checkin\/(\d{4}-\d{2}-\d{2})\/focus$/, form: true, week: 0, back: p => checkinPath(p[0]) },
+  { name: 'checkinDone', pattern: /^\/checkin\/(\d{4}-\d{2}-\d{2})\/done$/, week: 0, back: () => '/' },
+  { name: 'checkinEdit', pattern: /^\/checkin\/(\d{4}-\d{2}-\d{2})\/edit$/, form: true, week: 0, back: p => checkinPath(p[0]) },
+  { name: 'settings', pattern: /^\/settings$/, nav: true, noDoc: true, back: () => '/' },
+  { name: 'backup', pattern: /^\/settings\/backup$/, form: true, noDoc: true, back: () => '/settings' },
+  { name: 'erase', pattern: /^\/settings\/erase$/, form: true, noDoc: true, back: () => '/settings' },
+  { name: 'diagnostics', pattern: /^\/settings\/diagnostics$/, nav: true, noDoc: true, back: () => '/settings' },
+  { name: 'recovery', pattern: /^\/recovery$/, form: true, noDoc: true, back: () => '/' },
+];
+function goalPath(id) { return '/goal/' + encodeURIComponent(id); }
+function checkinPath(weekKey) { return '/checkin/' + weekKey; }
+// The address of a check-in step, or of the focus step when goalId is null.
+function stepPath(weekKey, goalId) { return goalId ? '/checkin/' + weekKey + '/goal/' + encodeURIComponent(goalId) : '/checkin/' + weekKey + '/focus'; }
+function routeFor(path) {
+  for (const r of ROUTES) {
+    const m = r.pattern.exec(path);
+    if (!m) continue;
+    const params = m.slice(1).map(x => { try { return decodeURIComponent(x); } catch (e) { return x; } });
+    return {
+      name: r.name, params, path, form: !!r.form, nav: !!r.nav, tab: r.tab || '', noDoc: !!r.noDoc,
+      goalId: r.goal !== undefined ? params[r.goal] : null,
+      weekKey: r.week !== undefined ? params[r.week] : null,
+      stepGoalId: r.step !== undefined ? params[r.step] : null,
+      action: r.name === 'goalStatus' || r.name === 'goalMilestone' ? params[1] : '',
+      back: r.back ? r.back(params) : '/', unknown: false,
+    };
+  }
+  return { name: 'board', params: [], path, form: false, nav: true, tab: 'board', noDoc: false, goalId: null, weekKey: null, stepGoalId: null, action: '', back: '/', unknown: true };
+}
+function currentRoute() { return routeFor((location.hash || '').replace(/^#/, '') || '/'); }
+function isFormRoute() { return currentRoute().form; }
+function navigate(path) { location.hash = '#' + path; }
+// Each history entry stores its depth inside the app, so Back never leaves the app by mistake.
+function syncDepth() {
+  const s = history.state;
+  if (s && isInt(s.depth)) APP.depth = s.depth;
+  else {
+    APP.depth = APP.depthKnown ? APP.depth + 1 : 0;
+    try { history.replaceState({ depth: APP.depth }, ''); } catch (e) { /* depth stays in memory only */ }
+  }
+  APP.depthKnown = true;
+}
+function goBack(fallback) {
+  if (APP.depth > 0) { history.back(); return; }
+  replaceRoute(fallback);
+}
+// Shows another screen in place of this one without adding a history entry, so Back skips this one.
+function replaceRoute(path) {
+  try { history.replaceState({ depth: APP.depth }, '', '#' + path); } catch (e) { location.replace('#' + path); return; }
+  onRouteChange();
+}
+function onRouteChange() {
+  flushPending();
+  if (APP.routeName === 'board') APP.scroll.board = window.scrollY;
+  syncDepth();
+  closeDialog();
+  render();
+  const h = document.querySelector('#page h1');
+  if (h) { try { h.focus({ preventScroll: true }); } catch (e) { h.focus(); } }
+  window.scrollTo(0, APP.routeName === 'board' ? (APP.scroll.board || 0) : 0);
+}
+  /* =============================== SELFTEST =============================== */
+// Runs on sample data in memory only: it never changes your data or the real store (spec 10). Dates are
+// fixed around Wednesday 11 Nov 2026 and built in local time, so results don't depend on today or time zone.
+function runSelfTest() {
+  const results = [];
+  const test = (name, fn) => {
+    try {
+      fn();
+      results.push({ name, pass: true, detail: '' });
+    } catch (e) {
+      results.push({ name, pass: false, detail: (e instanceof UserError ? 'Refused: ' : '') + ((e && e.message) || String(e)) });
+    }
+  };
+  const check = (cond, msg) => { if (!cond) throw new Error(msg); };
+  const eq = (actual, expected, label) => {
+    if (!deepEqual(actual, expected)) throw new Error(label + ': expected ' + JSON.stringify(expected) + ', got ' + JSON.stringify(actual));
+  };
+  const refuses = (fn, label) => {
+    let threw = null;
+    try { fn(); } catch (e) { threw = e; }
+    if (!threw) throw new Error(label + ': expected a refusal, but it was accepted');
+    if (!(threw instanceof UserError)) throw new Error(label + ': expected a refusal, got an error: ' + threw.message);
+  };
+  const NOW = new Date(2026, 10, 11, 12, 0, 0);          // Wednesday 11 Nov 2026, local noon
+  const CUR = '2026-11-09';                               // its week, starting Monday
+  const PREV = '2026-11-02';
+  const at = s => { const p = parseYMD(s); return new Date(p.y, p.m - 1, p.d, 12, 0, 0); };
+  const run = (doc, name, payload, now) => runAction(doc, name, payload, now || NOW);
+  const withGoals = n => {
+    let d = defaultDoc(NOW);
+    const ids = [];
+    for (let i = 1; i <= n; i += 1) {
+      const r = run(d, 'addGoal', { title: 'Goal ' + i });
+      d = r.doc;
+      ids.push(r.result.goalId);
+    }
+    return { d, ids };
+  };
+  const goal = (d, id) => goalById(d, id);
+  const pushDone = (d, weekKey, answers) => {
+    d.checkins.push({
+      id: newId(), weekKey, startedAt: isoNow(NOW), completedAt: isoNow(NOW),
+      items: Object.keys(answers).map(id => ({ goalId: id, progress: answers[id], note: '', nextAction: null })),
+      focusGoalIds: [],
+    });
+  };
+  const demo = () => makeDemoDoc(NOW);
+  const breaks = (mutate, fragment) => {
+    const d = demo();
+    mutate(d);
+    const errs = validate(d);
+    check(errs.some(e => e.indexOf(fragment) !== -1), 'expected a problem containing "' + fragment + '", got ' + (errs.length ? errs.join(' | ') : 'none'));
+  };
+  // Screens are drawn off-page from a context with its own in-memory store.
+  const ctxFor = d => ({ doc: d, store: makeStore(memoryBackend(0), 'memory'), now: NOW, today: todayLocal(NOW) });
+  const draw = (path, ctx) => {
+    const route = routeFor(path);
+    if (route.unknown) throw new Error(path + ' is not a known address');
+    const page = el('main');
+    PAGES[route.name](page, route, ctx);
+    return page;
+  };
+
+  /* ---- Dates (spec tests 1-4) ---- */
+  test('1. Today uses the device date, even just after midnight', () => {
+    eq(todayLocal(new Date(2026, 10, 9, 0, 10)), '2026-11-09', 'todayLocal at 00:10');
+  });
+  test('2. Week start for every weekday, Monday and Sunday starts', () => {
+    for (let i = 0; i < 7; i += 1) {
+      const day = addDays('2026-11-09', i);
+      eq(weekStart(day, 1), '2026-11-09', 'Monday start for ' + day);
+      eq(weekStart(day, 0), i === 6 ? '2026-11-15' : '2026-11-08', 'Sunday start for ' + day);
+    }
+    eq(weekStart('2027-01-01', 1), '2026-12-28', '1 Jan 2027');
+  });
+  test('3. Adding days across year ends and leap days', () => {
+    eq(addDays('2026-12-31', 1), '2027-01-01', '31 Dec 2026 + 1');
+    eq(addDays('2028-02-28', 1), '2028-02-29', '28 Feb 2028 + 1');
+    eq(addDays('2027-02-28', 1), '2027-03-01', '28 Feb 2027 + 1');
+    eq(diffDays('2026-11-09', '2026-11-11'), 2, 'days between');
+  });
+  test('4. Impossible dates are rejected', () => {
+    ['2026-02-30', '2026-13-01', '26-1-1', ''].forEach(s => check(parseYMD(s) === null, '"' + s + '" was accepted'));
+    check(parseYMD('2028-02-29') !== null, '29 Feb 2028 was rejected');
+    check(!isYM('2026-13') && isYM('2026-12'), 'month check');
+  });
+
+  /* ---- Rules (spec test 5) ---- */
+  test('5a. Empty and demo data pass every rule', () => {
+    eq(validate(defaultDoc(NOW)), [], 'empty data');
+    eq(validate(demo()), [], 'demo data');
+  });
+  test('5b. Rule 1: repeated ids are caught', () => breaks(d => { d.changes[0].id = d.goals[0].id; }, 'repeats id'));
+  test('5c. Rule 2: links to missing goals are caught', () => {
+    breaks(d => { d.changes[0].goalId = 'missing'; }, 'points to a goal that does not exist');
+    breaks(d => { d.checkins[0].items[0].goalId = 'missing'; }, 'points to a goal that does not exist');
+    breaks(d => { d.checkins[0].focusGoalIds = ['missing']; }, 'has a focus goal that does not exist');
+  });
+  test('5d. Rule 3: focus only on active goals, at most three', () => {
+    breaks(d => { d.goals[4].inFocus = true; }, 'is in focus but not active');
+    breaks(d => { d.goals[3].inFocus = true; }, 'More than 3 goals are in focus');
+  });
+  test('5e. Rule 4: revisit dates only on parked goals', () => breaks(d => { d.goals[0].revisitOn = '2026-12-01'; }, 'has a revisit date but is not parked'));
+  test('5f. Rule 5: one current milestone, none on closed goals', () => {
+    breaks(d => { d.goals[0].milestones[0].status = 'current'; }, 'more than one current milestone');
+    breaks(d => { d.goals[5].milestones[0].status = 'current'; }, 'closed but still has a current milestone');
+  });
+  test('5g. Rule 6: one check-in per week, starting on the right day', () => {
+    breaks(d => { d.checkins[1].weekKey = d.checkins[0].weekKey; }, 'repeats the week of');
+    breaks(d => { d.checkins[0].weekKey = addDays(d.checkins[0].weekKey, 1); }, 'does not start on the chosen first day');
+  });
+  test('5h. Rule 7: one draft at a time, finished check-ins fully answered', () => {
+    breaks(d => { d.checkins[0].completedAt = null; d.checkins[1].completedAt = null; }, 'more than one draft');
+    breaks(d => { d.checkins[0].items[0].progress = null; }, 'unanswered in a finished check-in');
+  });
+  test('5i. Rule 8: wrong values and impossible dates are caught', () => {
+    breaks(d => { d.goals[0].status = 'paused'; }, 'unknown status');
+    breaks(d => { d.goals[0].targetMonth = '2026-13'; }, 'targetMonth must be');
+    breaks(d => { d.goals[0].milestones[1].dueDate = '2026-02-30'; }, 'dueDate must be a date');
+    breaks(d => { d.settings.weekStartsOn = 7; }, 'weekStartsOn must be 0 to 6');
+  });
+
+  /* ---- Goals, status and milestones (spec tests 6-8) ---- */
+  test('6. Editing: no change and spaces add nothing, two fields make one entry, minor is kept', () => {
+    const { d, ids } = withGoals(1);
+    const g = ids[0];
+    const base = d.changes.length;
+    check(!run(d, 'editGoal', { goalId: g, title: 'Goal 1', why: '', doneLooksLike: '', targetMonth: null }).changed, 'saving without changes changed the data');
+    check(!run(d, 'editGoal', { goalId: g, title: '  Goal 1  ', why: '   ', doneLooksLike: '', targetMonth: '' }).changed, 'spaces only changed the data');
+    const two = run(d, 'editGoal', { goalId: g, title: 'Goal one', why: 'Because', doneLooksLike: '', targetMonth: null }).doc;
+    eq(two.changes.length, base + 1, 'history entries');
+    const last = two.changes[two.changes.length - 1];
+    eq([last.kind, last.diffs.map(x => x.field)], ['edited', ['title', 'why']], 'entry');
+    const minor = run(two, 'editGoal', { goalId: g, title: 'Goal one', why: 'Because', doneLooksLike: 'Done', targetMonth: null, minor: true }).doc;
+    check(minor.changes[minor.changes.length - 1].minor === true, 'minor flag not stored');
+  });
+  test('7a. Parking needs a reason and a future revisit date, and clears focus', () => {
+    let { d, ids } = withGoals(2);
+    d = run(d, 'setFocus', { goalId: ids[0], on: true }).doc;
+    refuses(() => run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: '  ' }), 'parking without a reason');
+    refuses(() => run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Exams first', revisitOn: '2026-11-11' }), 'revisit date of today');
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Exams first', revisitOn: '2026-12-01' }).doc;
+    const g = goal(d, ids[0]);
+    eq([g.status, g.inFocus, g.revisitOn], ['parked', false, '2026-12-01'], 'parked goal');
+  });
+  test('7b. Reactivating clears the revisit date and moves the goal last', () => {
+    let { d, ids } = withGoals(3);
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later', revisitOn: '2026-12-01' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'active' }).doc;
+    const g = goal(d, ids[0]);
+    eq([g.status, g.revisitOn, d.goals[d.goals.length - 1].id], ['active', null, ids[0]], 'reactivated goal');
+    eq(d.changes[d.changes.length - 1].diffs, [{ field: 'status', from: 'parked', to: 'active' }, { field: 'revisitOn', from: '2026-12-01', to: null }], 'history entry');
+  });
+  test('7c. A 13th active goal is refused, when adding or reactivating', () => {
+    let { d, ids } = withGoals(12);
+    refuses(() => run(d, 'addGoal', { title: 'Goal 13' }), 'adding a 13th');
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Room' }).doc;
+    d = run(d, 'addGoal', { title: 'Goal 13' }).doc;
+    refuses(() => run(d, 'setStatus', { goalId: ids[0], to: 'active' }), 'reactivating a 13th');
+  });
+  test('7d. A fourth focus goal is refused unless one is swapped out', () => {
+    let { d, ids } = withGoals(4);
+    for (let i = 0; i < 3; i += 1) d = run(d, 'setFocus', { goalId: ids[i], on: true }).doc;
+    refuses(() => run(d, 'setFocus', { goalId: ids[3], on: true }), 'a fourth focus goal');
+    d = run(d, 'setFocus', { goalId: ids[3], on: true, replaceGoalId: ids[0] }).doc;
+    eq(focusGoals(d).map(g => g.id), [ids[1], ids[2], ids[3]], 'focus after the swap');
+  });
+  test('7e. Achieving closes the current milestone; dropping needs a reason', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'addMilestone', { goalId: ids[0], text: 'Step one' }).doc;
+    refuses(() => run(d, 'setStatus', { goalId: ids[0], to: 'dropped' }), 'dropping without a reason');
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'achieved' }).doc;
+    const g = goal(d, ids[0]);
+    check(g.closedAt !== null && g.milestones[0].status === 'done' && g.milestones[0].closedAt !== null, 'milestone not closed on achieve');
+  });
+  test('8. Milestones: one current, done sets closedAt, replace keeps the old one', () => {
+    let { d, ids } = withGoals(1);
+    const g = ids[0];
+    const first = run(d, 'addMilestone', { goalId: g, text: 'First' });
+    d = first.doc;
+    refuses(() => run(d, 'addMilestone', { goalId: g, text: 'Second' }), 'a second current milestone');
+    d = run(d, 'completeMilestone', { goalId: g, milestoneId: first.result.milestoneId }).doc;
+    const m1 = goal(d, g).milestones[0];
+    check(m1.status === 'done' && isISO(m1.closedAt), 'the done milestone has no closedAt');
+    const third = run(d, 'addMilestone', { goalId: g, text: 'Third' });
+    d = run(third.doc, 'replaceMilestone', { goalId: g, milestoneId: third.result.milestoneId, text: 'Fourth' }).doc;
+    eq(goal(d, g).milestones.map(m => m.text + ':' + m.status), ['First:done', 'Third:dropped', 'Fourth:current'], 'milestones');
+    eq(d.changes[d.changes.length - 1].kind, 'milestone-replaced', 'history kind');
+  });
+  test('8b. Repeated submits change nothing the second time', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'addGoal', { id: 'fixed-goal-id', title: 'Once' }).doc;
+    check(!run(d, 'addGoal', { id: 'fixed-goal-id', title: 'Once' }).changed, 'goal added twice');
+    d = run(d, 'addMilestone', { goalId: 'fixed-goal-id', id: 'fixed-milestone-id', text: 'Step' }).doc;
+    check(!run(d, 'addMilestone', { goalId: 'fixed-goal-id', id: 'fixed-milestone-id', text: 'Step' }).changed, 'milestone added twice');
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later' }).doc;
+    check(!run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later' }).changed, 'parked twice');
+    d = run(d, 'deleteGoal', { goalId: 'fixed-goal-id' }).doc;
+    check(!run(d, 'deleteGoal', { goalId: 'fixed-goal-id' }).changed, 'deleted twice');
+  });
+  test('8c. Titles are cleaned and checked', () => {
+    const d = defaultDoc(NOW);
+    const r = run(d, 'addGoal', { title: '  Line one\nline two  ' });
+    eq(goal(r.doc, r.result.goalId).title, 'Line one line two', 'flattened title');
+    refuses(() => run(d, 'addGoal', { title: '   ' }), 'a blank title');
+    refuses(() => run(d, 'addGoal', { title: 'x'.repeat(81) }), 'an 81-character title');
+  });
+
+  /* ---- Check-ins (spec tests 9-13) ---- */
+  test('9. Check-in: one draft per start, every answer needed, a second Finish is harmless', () => {
+    let { d, ids } = withGoals(2);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    check(!run(d, 'startCheckin', { weekKey: CUR }).changed, 'a second start changed the data');
+    eq(d.checkins.length, 1, 'check-ins after two starts');
+    refuses(() => run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }), 'finishing with unanswered goals');
+    ids.forEach(id => { d = run(d, 'answerItem', { weekKey: CUR, goalId: id, progress: 'yes' }).doc; });
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }).doc;
+    const again = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] });
+    check(!again.changed && again.result.alreadyDone === true, 'a second Finish was not harmless');
+    eq(d.checkins.filter(c => c.completedAt !== null).length, 1, 'finished check-ins');
+    refuses(() => run(d, 'startCheckin', { weekKey: CUR }), 'a second check-in for the same week');
+  });
+  test('9b. Check-ins only for this week or last week, one draft at a time', () => {
+    let { d } = withGoals(1);
+    refuses(() => run(d, 'startCheckin', { weekKey: '2026-10-26' }), 'two weeks ago');
+    refuses(() => run(d, 'startCheckin', { weekKey: '2026-11-16' }), 'next week');
+    d = run(d, 'startCheckin', { weekKey: PREV }).doc;
+    refuses(() => run(d, 'startCheckin', { weekKey: CUR }), 'a second draft');
+    refuses(() => run(defaultDoc(NOW), 'startCheckin', { weekKey: CUR }), 'no active goals');
+  });
+  test('10. Finish copies only edited next actions; an older week changes no goal', () => {
+    let { d, ids } = withGoals(2);
+    d = run(d, 'setNextAction', { goalId: ids[0], nextAction: 'Old A' }).doc;
+    d = run(d, 'setNextAction', { goalId: ids[1], nextAction: 'Old B' }).doc;
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes', nextAction: 'New A' }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[1], progress: 'no' }).doc;
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [ids[1]] }).doc;
+    eq([goal(d, ids[0]).nextAction, goal(d, ids[1]).nextAction], ['New A', 'Old B'], 'next actions');
+    eq([goal(d, ids[0]).inFocus, goal(d, ids[1]).inFocus], [false, true], 'focus');
+    const goalsBefore = JSON.stringify(d.goals);
+    d = run(d, 'startCheckin', { weekKey: PREV }).doc;
+    ids.forEach(id => { d = run(d, 'answerItem', { weekKey: PREV, goalId: id, progress: 'yes', nextAction: 'Older' }).doc; });
+    d = run(d, 'finishCheckin', { weekKey: PREV, focusGoalIds: [ids[0]] }).doc;
+    eq(JSON.stringify(d.goals), goalsBefore, 'goals after finishing the older week');
+  });
+  test('10b. A check-in dated in the future does not block later updates', () => {
+    let { d, ids } = withGoals(1);
+    const wrongClock = new Date(2026, 11, 8, 12, 0, 0);    // Tuesday 8 Dec 2026
+    d = run(d, 'startCheckin', { weekKey: '2026-12-07' }, wrongClock).doc;
+    d = run(d, 'answerItem', { weekKey: '2026-12-07', goalId: ids[0], progress: 'no' }, wrongClock).doc;
+    d = run(d, 'finishCheckin', { weekKey: '2026-12-07', focusGoalIds: [] }, wrongClock).doc;
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes', nextAction: 'Fixed clock' }).doc;
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [ids[0]] }).doc;
+    eq([goal(d, ids[0]).nextAction, goal(d, ids[0]).inFocus], ['Fixed clock', true], 'goal after the real week');
+    check(isLatestCompleted(d, CUR, NOW), 'the future check-in still counts as the latest');
+  });
+  test('11. Default week: last week early on if unfinished, otherwise this week', () => {
+    let { d, ids } = withGoals(1);
+    eq(defaultCheckinWeek(d, at('2026-11-09')), PREV, 'Monday');
+    eq(defaultCheckinWeek(d, at('2026-11-11')), PREV, 'Wednesday');
+    eq(defaultCheckinWeek(d, at('2026-11-12')), CUR, 'Thursday');
+    const mon = at('2026-11-09');
+    d = run(d, 'startCheckin', { weekKey: PREV }, mon).doc;
+    d = run(d, 'answerItem', { weekKey: PREV, goalId: ids[0], progress: 'yes' }, mon).doc;
+    d = run(d, 'finishCheckin', { weekKey: PREV, focusGoalIds: [] }, mon).doc;
+    eq(defaultCheckinWeek(d, mon), CUR, 'Monday after finishing last week');
+  });
+  test('12. Reconcile after parking a goal and adding one mid-check-in', () => {
+    let { d, ids } = withGoals(3);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[1], to: 'parked', reason: 'Later' }).doc;
+    const added = run(d, 'addGoal', { title: 'Added mid-check-in' });
+    d = run(added.doc, 'reconcileDraft', { weekKey: CUR }).doc;
+    eq(checkinByWeek(d, CUR).items.map(it => it.goalId).sort(), [ids[0], ids[2], added.result.goalId].sort(), 'goals in the check-in');
+    eq(nextStepGoalId(d, checkinByWeek(d, CUR)), ids[2], 'next step');
+  });
+  test('13. Stalled after three "no" answers; gaps and other check-ins do not reset it', () => {
+    const mk = weeks => {
+      const { d, ids } = withGoals(2);
+      weeks.forEach(([wk, p]) => pushDone(d, wk, p === null ? { [ids[1]]: 'yes' } : { [ids[0]]: p, [ids[1]]: 'yes' }));
+      eq(validate(d), [], 'test data');
+      return isStalled(d, ids[0], NOW);
+    };
+    check(mk([['2026-10-19', 'no'], ['2026-10-26', 'no'], [PREV, 'no']]) === true, 'no, no, no should be stalled');
+    check(mk([['2026-10-19', 'no'], ['2026-10-26', 'no'], [PREV, 'some']]) === false, 'no, no, a bit should not be stalled');
+    check(mk([['2026-10-12', 'no'], ['2026-10-19', 'no'], [PREV, 'no']]) === true, 'a week without a check-in should not reset it');
+    check(mk([['2026-10-12', 'no'], ['2026-10-19', 'no'], ['2026-10-26', null], [PREV, 'no']]) === true, 'a check-in without the goal should not reset it');
+    check(mk([['2026-10-19', 'no'], ['2026-10-26', null], [PREV, 'no']]) === false, 'a check-in without the goal should not count as "no"');
+    check(mk([['2026-10-19', 'no'], ['2026-10-26', 'no'], [PREV, 'no'], ['2026-12-07', 'yes']]) === true, 'a future-dated check-in should be ignored');
+  });
+  test('13b. The stall prompt comes on the third "no", and Keep going snoozes it', () => {
+    const { d, ids } = withGoals(1);
+    pushDone(d, '2026-10-26', { [ids[0]]: 'no' });
+    check(!shouldPromptStall(d, ids[0], PREV, 'no'), 'prompted on only the second "no"');
+    pushDone(d, PREV, { [ids[0]]: 'no' });
+    check(shouldPromptStall(d, ids[0], CUR, 'no'), 'no prompt on the third "no"');
+    check(!shouldPromptStall(d, ids[0], CUR, 'some'), 'prompted on "a bit"');
+    const snoozed = run(d, 'snoozeStall', { goalId: ids[0], weekKey: CUR }).doc;
+    eq(goal(snoozed, ids[0]).staleSnoozeUntil, '2026-11-30', 'snooze date');
+    check(!shouldPromptStall(snoozed, ids[0], '2026-11-16', 'no'), 'prompted while snoozed');
+  });
+
+  /* ---- Delete, backups, ids, text (spec tests 14-17) ---- */
+  test('14. Deleting a goal removes every trace and leaves valid data', () => {
+    const d0 = demo();
+    const id = d0.goals[0].id;
+    const d = run(d0, 'deleteGoal', { goalId: id }).doc;
+    eq(validate(d), [], 'rules after the delete');
+    check(!goalById(d, id), 'the goal is still there');
+    check(!d.changes.some(c => c.goalId === id), 'history left behind');
+    check(!d.checkins.some(c => c.items.some(it => it.goalId === id) || c.focusGoalIds.includes(id)), 'check-in traces left behind');
+  });
+  test('15. A backup round trip returns the same data', () => {
+    const d = demo();
+    check(deepEqual(parseBackupText(exportText(d, NOW)), d), 'the imported data differs from the original');
+    eq(backupFileName(NOW), 'compass-backup-2026-11-11.json', 'file name');
+  });
+  test('15b. Import refuses bad backups', () => {
+    const base = demo();
+    const variant = mutate => { const o = clone(base); mutate(o); return JSON.stringify(o); };
+    refuses(() => parseBackupText('not json'), 'not JSON');
+    refuses(() => parseBackupText(variant(o => { o.app = 'other'; })), 'another app');
+    refuses(() => parseBackupText(variant(o => { o.goals[0].status = 'paused'; })), 'an unknown status');
+    refuses(() => parseBackupText(variant(o => { o.changes[0].goalId = 'missing'; })), 'a link to a missing goal');
+    refuses(() => parseBackupText(variant(o => { o.changes[0].id = o.goals[0].id; })), 'a repeated id');
+    refuses(() => parseBackupText(variant(o => { o.checkins[1].weekKey = o.checkins[0].weekKey; })), 'a repeated week');
+    refuses(() => parseBackupText(variant(o => { o.schemaVersion = SCHEMA_VERSION + 1; })), 'a newer format');
+  });
+  test('16. Ids stay unique with and without crypto.randomUUID', () => {
+    const c = typeof crypto !== 'undefined' ? crypto : null;
+    const gens = [
+      ['with randomUUID', makeIdGen(c)],
+      ['without randomUUID', makeIdGen(c && c.getRandomValues ? { getRandomValues: a => c.getRandomValues(a) } : null)],
+      ['without crypto', makeIdGen(null)],
+    ];
+    gens.forEach(([label, gen]) => {
+      const seen = new Set();
+      for (let i = 0; i < 1000; i += 1) seen.add(gen());
+      check(seen.size === 1000, label + ': ' + (1000 - seen.size) + ' repeated ids');
+    });
+    if (c && c.getRandomValues) check(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(gens[1][1]()), 'id format without randomUUID');
+  });
+  test('17. Text that looks like HTML stays text', () => {
+    const s = '<img src=x onerror=alert(1)>';
+    const n = el('div', null, s);
+    check(n.children.length === 0 && n.textContent === s, 'the text became an element');
+  });
+
+  /* ---- v1.1 fixes and other safety checks ---- */
+  test('18. Repair never crashes and fixes what it safely can', () => {
+    [null, 'x', {}, { goals: [null], changes: [], checkins: [] }, { goals: 'x', changes: [], checkins: [] }].forEach(bad => { repairDoc(bad, NOW); });
+    const d = demo();
+    d.goals[4].inFocus = true;                     // a parked goal in focus
+    d.goals[3].inFocus = true;                     // a fourth focus goal
+    d.goals[0].revisitOn = '2026-12-01';           // a revisit date on an active goal
+    d.goals[0].milestones[0].status = 'current';   // two current milestones
+    d.changes[0].goalId = 'missing';
+    d.checkins[0].focusGoalIds.push('missing');
+    const fixed = repairDoc(d, NOW);
+    eq(validate(fixed), [], 'rules after repair');
+    eq(fixed.goals[0].milestones.map(m => m.status), ['dropped', 'current'], 'kept the newest current milestone');
+  });
+  test('19. Start-up reads empty, unreadable, newer, normal and repairable data correctly', () => {
+    const d = demo();
+    eq(interpretStored(null, NOW).status, 'empty', 'nothing stored');
+    eq(interpretStored('{oops', NOW).status, 'unreadable', 'broken JSON');
+    eq(interpretStored(JSON.stringify({ app: 'other' }), NOW).status, 'unreadable', 'another app');
+    eq(interpretStored(JSON.stringify(Object.assign({}, d, { schemaVersion: SCHEMA_VERSION + 1 })), NOW).status, 'newer', 'a newer format');
+    const ok = interpretStored(JSON.stringify(d), NOW);
+    check(ok.status === 'ok' && !ok.repaired && deepEqual(ok.doc, d), 'normal data');
+    const fixable = clone(d);
+    fixable.goals[4].inFocus = true;
+    const rep = interpretStored(JSON.stringify(fixable), NOW);
+    check(rep.status === 'ok' && rep.repaired && !rep.doc.goals[4].inFocus, 'repairable data');
+    const broken = clone(d);
+    broken.checkins[1].weekKey = broken.checkins[0].weekKey;
+    eq(interpretStored(JSON.stringify(broken), NOW).status, 'unreadable', 'unrepairable data');
+  });
+  test('20. Saves raise the counter; imports land above both', () => {
+    const st = makeStore(memoryBackend(0), 'local');
+    let d = st.save(defaultDoc(NOW)).doc;
+    eq(d.rev, 1, 'first save');
+    d = st.save(d).doc;
+    eq(d.rev, 2, 'second save');
+    const low = st.replaceAll(Object.assign(clone(d), { rev: 0 }), NOW, 'test import');
+    eq([low.ok, low.doc && low.doc.rev], [true, 3], 'import with a lower counter');
+    const high = st.replaceAll(Object.assign(clone(d), { rev: 10 }), NOW, 'test import');
+    eq([high.ok, high.doc && high.doc.rev], [true, 11], 'import with a higher counter');
+  });
+  test('21. A stale tab cannot save over newer or erased data', () => {
+    const backend = memoryBackend(0);
+    const a = makeStore(backend, 'local');
+    const b = makeStore(backend, 'local');
+    const d = a.save(defaultDoc(NOW)).doc;
+    eq(b.save(defaultDoc(NOW)).reason, 'conflict', 'a stale tab saving over new data');
+    b.loadedRev = d.rev;
+    check(b.save(d).ok, 'an up-to-date tab could not save');
+    eq(a.save(d).reason, 'conflict', 'the older tab after the other tab saved');
+    a.loadedRev = b.loadedRev;
+    b.eraseAll();
+    eq(a.save(d).reason, 'conflict', 'saving after the data was erased elsewhere');
+  });
+  test('22. When storage is full, safety copies are cleared first', () => {
+    const d0 = defaultDoc(NOW);
+    const d1 = runAction(d0, 'addGoal', { title: 'A goal that makes the data bigger' }, NOW).doc;
+    const fill = 'x'.repeat(200);
+    const safetyLen = KEYS.safety.length + JSON.stringify([{ at: isoNow(NOW), reason: 'filler', raw: fill }]).length;
+    const d1Len = KEYS.data.length + JSON.stringify(Object.assign({}, d1, { rev: 2 })).length;
+    const st = makeStore(memoryBackend(d1Len + safetyLen - 1), 'local');
+    check(st.save(d0).ok, 'the first save failed');
+    check(st.takeSafetyCopy(fill, 'filler', NOW), 'the safety copy did not fit');
+    const saved = st.save(d1);
+    eq([saved.ok, st.mode, st.safetyCopies().length, revOfText(st.readRaw()).rev], [true, 'local', 0, 2], 'a save that only fits without the safety copy');
+  });
+  test('23. A save that cannot fit keeps the data in memory and says so', () => {
+    const d0 = defaultDoc(NOW);
+    const d0Len = KEYS.data.length + JSON.stringify(Object.assign({}, d0, { rev: 1 })).length;
+    const st = makeStore(memoryBackend(d0Len), 'local');
+    check(st.save(d0).ok, 'the first save failed');
+    const big = runAction(d0, 'addGoal', { title: 'Too big to fit' }, NOW).doc;
+    const saved = st.save(big);
+    eq([saved.ok, st.mode, revOfText(st.readRaw()).rev], [true, 'memory', 2], 'a save that cannot fit');
+    check(st.memoryReason.indexOf('the last save failed') === 0, 'no reason given for memory mode');
+  });
+  test('24. A failed import leaves the current data exactly as it was', () => {
+    const st = makeStore(memoryBackend(3000), 'local');
+    check(st.save(defaultDoc(NOW)).ok, 'the first save failed');
+    const before = st.readRaw();
+    const result = st.replaceAll(demo(), NOW, 'test import');
+    eq([result.ok, result.reason, st.readRaw() === before, st.mode], [false, 'full', true, 'local'], 'after a failed import');
+  });
+  test('25. Old editor drafts and drafts for deleted goals are cleared', () => {
+    const { d, ids } = withGoals(1);
+    const st = makeStore(memoryBackend(0), 'local');
+    st.setDraft(ids[0], { title: 'Recent' }, NOW);
+    st.setDraft('deleted-goal', { title: 'Gone' }, NOW);
+    st.setDraft(null, { title: 'Old new goal' }, new Date(NOW.getTime() - 15 * DAY_MS));
+    st.cleanupDrafts(d, NOW);
+    eq(st.draftKeys(), [st.draftKey(ids[0])], 'drafts left');
+    st.setDraft(null, { title: 'Fresh new goal' }, NOW);
+    st.cleanupDrafts(d, NOW);
+    eq(st.draftKeys().length, 2, 'a fresh new-goal draft was removed');
+  });
+  test('26. Reordering skips goals that are not active', () => {
+    let { d, ids } = withGoals(3);
+    d = run(d, 'setStatus', { goalId: ids[1], to: 'parked', reason: 'Later' }).doc;
+    d = run(d, 'moveGoal', { goalId: ids[2], direction: 'up' }).doc;
+    eq(d.goals.map(g => g.id), [ids[2], ids[1], ids[0]], 'order after moving up');
+    check(!run(d, 'moveGoal', { goalId: ids[2], direction: 'up' }).changed, 'moved past the top');
+  });
+  test('27. Editing a finished check-in: this week or last only, no side effects', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes' }).doc;
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }).doc;
+    const goalsBefore = JSON.stringify(d.goals);
+    d = run(d, 'editCheckin', { weekKey: CUR, items: [{ goalId: ids[0], progress: 'no', note: 'Changed my mind' }] }).doc;
+    const it = checkinByWeek(d, CUR).items[0];
+    eq([it.progress, it.note], ['no', 'Changed my mind'], 'edited answer');
+    eq(JSON.stringify(d.goals), goalsBefore, 'goals after editing');
+    refuses(() => run(d, 'editCheckin', { weekKey: CUR, items: [] }, at('2026-11-25')), 'editing a check-in from two weeks back');
+  });
+  test('28. The week start locks once a check-in exists', () => {
+    let { d } = withGoals(1);
+    d = run(d, 'updateSettings', { weekStartsOn: '0', staleAfter: '4' }).doc;
+    eq([d.settings.weekStartsOn, d.settings.staleAfter], [0, 4], 'settings given as text');
+    d = run(d, 'updateSettings', { weekStartsOn: 1 }).doc;
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    refuses(() => run(d, 'updateSettings', { weekStartsOn: 0 }), 'changing the week start');
+    refuses(() => run(d, 'updateSettings', { staleAfter: 9 }), 'a stall limit out of range');
+  });
+  test('29. Finish refuses an empty check-in and a focus pick that is no longer active', () => {
+    let { d, ids } = withGoals(2);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    ids.forEach(id => { d = run(d, 'answerItem', { weekKey: CUR, goalId: id, progress: 'yes' }).doc; });
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'Later' }).doc;
+    refuses(() => run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [ids[0]] }), 'focus on a parked goal');
+    const one = withGoals(1);
+    let e = run(one.d, 'startCheckin', { weekKey: CUR }).doc;
+    e = run(e, 'setStatus', { goalId: one.ids[0], to: 'parked', reason: 'Later' }).doc;
+    refuses(() => run(e, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }), 'an empty check-in');
+  });
+  test('30. A note saved after Finish is ignored', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes' }).doc;
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [] }).doc;
+    check(!run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], note: 'Late' }).changed, 'a late note changed a finished check-in');
+  });
+  test('31. Demo data reads correctly: revisits, weekly cells, focus, stalls', () => {
+    const d = demo();
+    eq(revisitsDue(d, NOW).map(g => g.title), ['Learn conversational Spanish'], 'revisits due');
+    eq([cellState(d, d.goals[0].id, PREV), cellState(d, d.goals[4].id, PREV), cellState(d, d.goals[0].id, CUR)], ['yes', 'excluded', 'none'], 'weekly cells');
+    eq(focusGoals(d).length, 3, 'focus goals');
+    check(isStalled(d, d.goals[2].id, NOW) && !isStalled(d, d.goals[0].id, NOW), 'stalled goals');
+  });
+
+  /* ---- Goal screens ---- */
+  test('32. Target and milestone wording: this month, in N months, overdue, due today', () => {
+    const today = '2026-11-11';
+    eq(monthsBetween('2026-11', '2027-02'), 3, 'months between');
+    check(targetText('2026-11', today).endsWith('this month'), 'this month: ' + targetText('2026-11', today));
+    check(targetText('2026-12', today).endsWith('in 1 month'), 'one month: ' + targetText('2026-12', today));
+    check(targetText('2027-03', today).endsWith('in 4 months'), 'four months: ' + targetText('2027-03', today));
+    check(targetText('2026-10', today).endsWith('overdue'), 'overdue: ' + targetText('2026-10', today));
+    eq(milestoneText({ text: 'X', dueDate: today }, today), 'X · due today', 'due today');
+    eq(milestoneText({ text: 'X', dueDate: '2026-11-10' }, today), 'X · overdue', 'overdue milestone');
+    eq(milestoneText({ text: 'X', dueDate: null }, today), 'X', 'no due date');
+  });
+  test('33. Each address opens the right screen, and Back has the right fallback', () => {
+    const cases = [
+      ['/', 'board', null, ''], ['/reorder', 'reorder', null, '/'], ['/goal/new', 'goalNew', null, '/'],
+      ['/goal/abc', 'goal', 'abc', '/'], ['/goal/abc/edit', 'goalEdit', 'abc', '/goal/abc'],
+      ['/goal/abc/status/park', 'goalStatus', 'abc', '/goal/abc'], ['/goal/abc/milestone/replace', 'goalMilestone', 'abc', '/goal/abc'],
+      ['/shelf', 'shelf', null, ''], ['/settings', 'settings', null, '/'], ['/settings/diagnostics', 'diagnostics', null, '/settings'],
+    ];
+    cases.forEach(([path, name, goalId, back]) => {
+      const r = routeFor(path);
+      eq([r.name, r.goalId, r.unknown], [name, goalId, false], path);
+      if (back) eq(r.back, back, 'Back from ' + path);
+    });
+    ['/nope', '/goal/abc/status/fly', '/goal/', '/goal/abc/milestone/x'].forEach(p => check(routeFor(p).unknown, p + ' should be unknown'));
+    eq([routeFor('/goal/abc').form, routeFor('/').form, routeFor('/goal/abc/edit').nav], [true, false, false], 'typing and tab-bar flags');
+  });
+  test('34. The editor spots real changes only, and needs both month and year', () => {
+    const saved = { title: 'Run', why: 'Health', doneLooksLike: '', targetMonth: '2027-03' };
+    const f = o => Object.assign({ title: 'Run', why: 'Health', doneLooksLike: '', month: '03', year: '2027', reason: '' }, o);
+    eq(editorChanges(saved, f({})), [], 'no change');
+    eq(editorChanges(saved, f({ title: '  Run  ', why: 'Health\n' })), [], 'spaces only');
+    eq(editorChanges(saved, f({ why: 'Health and calm', year: '2028' })), ['why', 'targetMonth'], 'two changes');
+    eq([toTargetMonth(f({})), toTargetMonth(f({ month: '', year: '' })), toTargetMonth(f({ year: '' }))], ['2027-03', null, 'incomplete'], 'target month');
+    refuses(() => run(defaultDoc(NOW), 'addGoal', { title: 'Y', targetMonth: 'incomplete' }), 'a month without a year');
+  });
+  test('35. Shelf order and reasons', () => {
+    let { d, ids } = withGoals(5);
+    d = run(d, 'setStatus', { goalId: ids[0], to: 'parked', reason: 'No date' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[1], to: 'parked', reason: 'Later one', revisitOn: '2027-01-10' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[2], to: 'parked', reason: 'Sooner one', revisitOn: '2026-12-01' }).doc;
+    d = run(d, 'keepParked', { goalId: ids[2], revisitOn: '2026-12-05' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[3], to: 'achieved' }, at('2026-11-12')).doc;
+    d = run(d, 'setStatus', { goalId: ids[4], to: 'achieved' }, at('2026-11-13')).doc;
+    const g = shelfGroups(d);
+    eq(g.parked.map(x => x.id), [ids[2], ids[1], ids[0]], 'parked order');
+    eq(g.achieved.map(x => x.id), [ids[4], ids[3]], 'achieved order, newest first');
+    eq(lastStatusChange(d, ids[2]).reason, 'Sooner one', 'reason after changing the revisit date');
+  });
+  test('36. Every goal screen draws with demo data', () => {
+    const d = demo();
+    const ctx = ctxFor(d);
+    const paths = ['/', '/reorder', '/goal/new', '/shelf', '/settings'];
+    ['active', 'parked', 'achieved'].forEach(s => {
+      const id = encodeURIComponent(d.goals.find(g => g.status === s).id);
+      paths.push('/goal/' + id, '/goal/' + id + '/edit');
+      ['park', 'drop', 'achieve', 'reactivate', 'repark'].forEach(a => paths.push('/goal/' + id + '/status/' + a));
+      ['add', 'edit', 'done', 'replace'].forEach(a => paths.push('/goal/' + id + '/milestone/' + a));
+    });
+    paths.forEach(p => check(draw(p, ctx).querySelector('h1'), p + ' drew no heading'));
+    check(draw('/', ctxFor(defaultDoc(NOW))).querySelector('.empty'), 'the empty board has no welcome');
+  });
+  test('37. A title with HTML and emoji shows exactly as typed', () => {
+    const title = 'Test <b>bold</b> & "quotes" 😀';
+    const r = run(defaultDoc(NOW), 'addGoal', { title });
+    const ctx = ctxFor(r.doc);
+    const cardTitle = draw('/', ctx).querySelector('.gc-title');
+    check(cardTitle && cardTitle.textContent === title && !cardTitle.querySelector('b'), 'board card shows: ' + (cardTitle ? cardTitle.textContent : 'nothing'));
+    const h1 = draw('/goal/' + encodeURIComponent(r.result.goalId), ctx).querySelector('h1');
+    check(h1.textContent === title && !h1.querySelector('b'), 'goal page heading shows: ' + h1.textContent);
+  });
+  test('38. The board puts focus goals first and shows the six-week strip only after a check-in', () => {
+    let { d, ids } = withGoals(3);
+    d = run(d, 'setFocus', { goalId: ids[2], on: true }).doc;
+    let page = draw('/', ctxFor(d));
+    eq(Array.from(page.querySelectorAll('.gc-title')).map(n => n.textContent), ['Goal 3', 'Goal 1', 'Goal 2'], 'card order');
+    check(!page.querySelector('.strip'), 'the strip shows before any check-in');
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    ids.forEach(id => { d = run(d, 'answerItem', { weekKey: CUR, goalId: id, progress: 'yes' }).doc; });
+    d = run(d, 'finishCheckin', { weekKey: CUR, focusGoalIds: [ids[2]] }).doc;
+    page = draw('/', ctxFor(d));
+    eq(page.querySelectorAll('.strip').length, 3, 'strips after a check-in');
+  });
+  test('39. History lists the newest entry first by the order written, not by clock time', () => {
+    let { d, ids } = withGoals(1);
+    d = run(d, 'editGoal', { goalId: ids[0], title: 'First edit' }, at('2026-11-12')).doc;
+    d = run(d, 'editGoal', { goalId: ids[0], title: 'Second edit' }, at('2026-11-10')).doc;   // the clock went backwards
+    const items = draw('/goal/' + encodeURIComponent(ids[0]), ctxFor(d)).querySelectorAll('.timeline > li');
+    eq(items.length, 3, 'history entries');
+    check(items[0].textContent.indexOf('Second edit') !== -1 && items[2].textContent.indexOf('Created') !== -1, 'the newest written entry is not first');
+  });
+  test('40. The editor offers to restore a changed draft and drops one that matches', () => {
+    const { d, ids } = withGoals(1);
+    const ctx = ctxFor(d);
+    const editPath = '/goal/' + encodeURIComponent(ids[0]) + '/edit';
+    ctx.store.setDraft(ids[0], { title: 'Goal 1 changed', why: '', doneLooksLike: '', month: '', year: '', reason: '' }, NOW);
+    check(draw(editPath, ctx).querySelector('.notice'), 'no restore offer for a changed draft');
+    ctx.store.setDraft(ids[0], { title: 'Goal 1', why: '', doneLooksLike: '', month: '', year: '', reason: '' }, NOW);
+    check(!draw(editPath, ctx).querySelector('.notice'), 'restore offered for an unchanged draft');
+    check(ctx.store.getDraft(ids[0]) === null, 'the unchanged draft was kept');
+    ctx.store.setDraft(null, { title: 'Half-typed new goal' }, NOW);
+    check(draw('/goal/new', ctx).querySelector('.notice'), 'no restore offer for a new-goal draft');
+  });
+
+  /* ---- Check-in, insights, backup and recovery screens ---- */
+  test('41. Check-in, insights, backup and recovery addresses open the right screens', () => {
+    const r = routeFor('/checkin/2026-11-09/goal/abc');
+    eq([r.name, r.weekKey, r.stepGoalId, r.goalId, r.form, r.nav, r.back], ['checkinStep', '2026-11-09', 'abc', null, true, false, '/checkin/2026-11-09'], 'a check-in step');
+    eq(['/checkin', '/checkin/2026-11-09', '/checkin/2026-11-09/focus', '/checkin/2026-11-09/done', '/checkin/2026-11-09/edit', '/insights', '/settings/backup', '/settings/erase', '/recovery'].map(p => routeFor(p).name),
+      ['checkin', 'checkinWeek', 'checkinFocus', 'checkinDone', 'checkinEdit', 'insights', 'backup', 'erase', 'recovery'], 'screen names');
+    ['/checkin/2026-11-9', '/checkin/2026-11-09/goal/', '/checkin/2026-11-09/other'].forEach(p => check(routeFor(p).unknown, p + ' should be unknown'));
+    check(routeFor('/recovery').noDoc && routeFor('/settings/backup').noDoc && !routeFor('/insights').noDoc, 'screens that work without readable data');
+  });
+  test('42. The check-in opens the right week, skips parked goals and holds focus until all are answered', () => {
+    let { d, ids } = withGoals(2);
+    eq(checkinTargetWeek(d, NOW), PREV, 'early in the week, an unfinished last week comes first');
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    eq(checkinTargetWeek(d, NOW), CUR, 'an unfinished check-in comes first');
+    eq(checkinRedirect(d, routeFor(stepPath(CUR, ids[0]))), null, 'a valid step stays');
+    eq(checkinRedirect(d, routeFor(stepPath(CUR, null))), stepPath(CUR, ids[0]), 'focus waits until every goal is answered');
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'yes' }).doc;
+    d = run(d, 'setStatus', { goalId: ids[1], to: 'parked', reason: 'Later' }).doc;
+    eq(checkinRedirect(d, routeFor(stepPath(CUR, ids[1]))), stepPath(CUR, null), 'a parked goal moves on to the focus step');
+    eq(checkinRedirect(d, routeFor(stepPath(CUR, null))), null, 'focus once every active goal is answered');
+    eq(checkinRedirect(d, routeFor(stepPath(PREV, ids[0]))), checkinPath(PREV), 'a week with no check-in goes to its start');
+  });
+  test('43. Check-in, insights, backup, erase and recovery screens draw with demo data', () => {
+    const base = demo();
+    const ids = activeGoals(base).map(g => g.id);
+    let d = run(base, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'no', note: 'Busy week' }).doc;
+    const ctx = ctxFor(d);
+    [checkinPath(CUR), stepPath(CUR, ids[0]), stepPath(CUR, ids[1]), stepPath(CUR, null), checkinPath(PREV), checkinPath(PREV) + '/done', checkinPath(PREV) + '/edit',
+      '/checkin', '/checkin/2026-11-10', '/insights', '/settings', '/settings/backup', '/settings/erase', '/recovery', '/']
+      .forEach(p => check(draw(p, ctx).querySelector('h1'), p + ' drew no heading'));
+    check(draw('/', ctx).querySelector('.card.checkin'), 'the board has no check-in card');
+    check(draw('/insights', ctx).querySelectorAll('.cellbtn').length > 0, 'insights shows no squares');
+    check(draw('/insights', ctxFor(defaultDoc(NOW))).querySelector('.empty'), 'insights before any check-in has no starting note');
+  });
+  test('44. Insights: up to 12 weeks from the first check-in, with "moved" counts', () => {
+    const d = demo();
+    const weeks = insightWeeks(d, NOW);
+    eq([weeks.length, weeks[0], weeks[weeks.length - 1]], [11, addDays(CUR, -70), CUR], 'weeks shown');
+    eq(movedStats(d, d.goals[0].id, weeks), { answered: 10, moved: 10 }, 'exams');
+    eq(movedStats(d, d.goals[2].id, weeks), { answered: 10, moved: 6 }, 'case report');
+    eq(movedStats(d, d.goals[4].id, weeks), { answered: 4, moved: 1 }, 'Spanish');
+    eq(insightWeeks(defaultDoc(NOW), NOW), [], 'no check-ins yet');
+  });
+  test('45. The backup reminder comes when it should', () => {
+    let { d } = withGoals(1);
+    check(backupDue(d, NOW), 'no reminder before the first backup');
+    d = run(d, 'markExported', {}).doc;
+    check(!backupDue(d, NOW), 'a reminder right after a backup');
+    const later = new Date(NOW.getTime() + 31 * DAY_MS);
+    check(backupDue(d, later), 'no reminder after 31 days');
+    d = run(d, 'snoozeBackupReminder', {}, later).doc;
+    check(!backupDue(d, new Date(NOW.getTime() + 32 * DAY_MS)), 'a reminder while snoozed');
+    check(!backupDue(defaultDoc(NOW), NOW), 'a reminder with no goals');
+  });
+  test('46. Erase removes only Compass data', () => {
+    const backend = memoryBackend(0);
+    backend.set('other-app:data', 'keep me');
+    const st = makeStore(backend, 'local');
+    st.save(defaultDoc(NOW));
+    st.setDraft('x', { title: 'Draft' }, NOW);
+    st.takeSafetyCopy('old data', 'test', NOW);
+    check(st.eraseAll(), 'erase reported a failure');
+    eq(backend.keys(), ['other-app:data'], 'what is left');
+  });
+  test('47. Restoring a backup replaces the data and keeps a copy of the old', () => {
+    const st = makeStore(memoryBackend(0), 'local');
+    st.save(run(defaultDoc(NOW), 'addGoal', { title: 'Mine' }).doc);
+    const r = st.replaceAll(parseBackupText(exportText(demo(), NOW)), NOW, 'before restoring a backup');
+    check(r.ok && r.safetyCopied, 'the restore failed');
+    eq(JSON.parse(st.readRaw()).goals.length, 6, 'goals after the restore');
+    check(st.safetyCopies().some(c => c.raw.indexOf('"Mine"') !== -1), 'no safety copy of the old data');
+  });
+  test('48. A check-in step shows the saved answer and the stall prompt on a third "no"', () => {
+    let { d, ids } = withGoals(1);
+    pushDone(d, '2026-10-26', { [ids[0]]: 'no' });
+    pushDone(d, PREV, { [ids[0]]: 'no' });
+    d = run(d, 'startCheckin', { weekKey: CUR }).doc;
+    d = run(d, 'answerItem', { weekKey: CUR, goalId: ids[0], progress: 'no' }).doc;
+    const page = draw(stepPath(CUR, ids[0]), ctxFor(d));
+    const pressed = Array.from(page.querySelectorAll('.answers .btn')).filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.textContent);
+    eq(pressed, ['✓ No'], 'the chosen answer');
+    check(page.querySelector('.notice'), 'no stall prompt on the third "no"');
+  });
+
+  return results;
+}
+
+/* =============================== BOOT =============================== */
+// Start-up (spec 7): read the address flags, pick the storage, load, clean up, listen, draw.
+// Flags: ?demo=1 sample data in memory, ?memory=1 forces the not-saving mode, ?selftest=1 runs the tests.
+function boot() {
+  const now = new Date();
+  const params = new URLSearchParams(location.search);
+  const flag = name => params.get(name) === '1';
+  ensureToast();
+  if (flag('demo')) {
+    APP.demo = true;
+    APP.store = makeStore(memoryBackend(0), 'demo');      // demo never probes or touches real storage
+    APP.doc = APP.store.save(makeDemoDoc(now)).doc;
+    APP.boot = { status: 'demo', problems: [], migrated: false, repaired: false };
+  } else {
+    if (flag('memory')) {
+      APP.store = makeStore(memoryBackend(0), 'memory');
+      APP.store.memoryReason = 'test mode is on (?memory=1).';
+    } else {
+      const probe = probeLocalStorage();
+      if (probe.ok) APP.store = makeStore(probe.backend, 'local');
+      else {
+        APP.store = makeStore(memoryBackend(0), 'memory');
+        APP.store.memoryReason = 'this browser is blocking storage for this page (' + probe.reason + ').';
+      }
+    }
+    loadData(now);
+    if (APP.store.mode === 'local' && APP.doc) APP.store.cleanupDrafts(APP.doc, now);   // only when data loaded properly
+    checkPersistence();
+  }
+  if (flag('selftest')) {
+    APP.selftest = runSelfTest();
+    // The results show on Diagnostics, so start there.
+    try { history.replaceState(null, '', '#/settings/diagnostics'); } catch (e) { location.hash = '#/settings/diagnostics'; }
+  }
+  syncDepth();
+  window.addEventListener('hashchange', onRouteChange);
+  window.addEventListener('storage', e => { if (e.key === KEYS.data || e.key === null) syncFromStorage(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncFromStorage(); else flushPending(); });
+  window.addEventListener('pagehide', () => flushPending());
+  window.addEventListener('pageshow', e => { if (e.persisted) syncFromStorage(); });
+  render();
+}
+
+try {
+  boot();
+} catch (e) {
+  console.error(e);
+  const root = document.getElementById('app');
+  if (root) {
+    root.textContent = '';
+    root.appendChild(document.createTextNode('Compass could not start. Your saved data was not changed. Details: ' + ((e && (e.stack || e.message)) || e)));
+  }
+}
+</script>
+</body>
+</html>
