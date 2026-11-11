@@ -4732,6 +4732,263 @@ html[data-screen="erase"] .btn.danger:not(:disabled) { animation: cz2-alarm 1.6s
     console.error(e);
   }
 })();
+    /* =============================== DESIGN PACK 3: QUTUBNUMA IN MOTION =============================== */
+// Effects only: it never changes your data.
+// Sparks on every tap, a mote of light for each check-in answer, a flash for each milestone done,
+// and a gem that drops into place for each new goal. None of it runs with Reduce Motion on.
+(function () {
+  try {
+    if (!document.getElementById('cz-design-2')) { toast('Design part 3 needs parts 1 and 2 above it. Nothing else changed.'); return; }
+    let reduceQuery = null;
+    try { reduceQuery = window.matchMedia('(prefers-reduced-motion: reduce)'); } catch (e) { /* motion stays on */ }
+    const calm = () => !!(reduceQuery && reduceQuery.matches);
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const px = n => n.toFixed(1) + 'px';
+
+    const CSS3 = `
+/* ---- Touch magic: the effects layer sits above everything and never takes a tap ---- */
+.cz-fx { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 95; overflow: hidden; pointer-events: none; }
+.cz3-burst { position: absolute; width: 0; height: 0; }
+.cz3-burst i { position: absolute; left: 0; top: 0; }
+.cz3-jewel::before { content: ""; position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid rgba(248,227,168,.9); box-shadow: 0 0 12px rgba(227,185,94,.7), inset 0 0 10px rgba(227,185,94,.4); animation: cz3-ring .55s ease-out both; }
+.cz3-jewel.cz3-big::before { left: -36px; top: -36px; width: 72px; height: 72px; border-color: rgba(244,255,208,.95); box-shadow: 0 0 18px rgba(200,255,61,.7), inset 0 0 12px rgba(227,185,94,.5); }
+.cz3-jewel i { width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 1.5px; background: linear-gradient(135deg, #fff6d6, #e3b95e 50%, #9c6e24); box-shadow: 0 0 8px rgba(255,220,140,.95); animation: cz3-glint .8s cubic-bezier(.15,.7,.3,1) both; }
+.cz3-jewel.cz3-big i { width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; animation-duration: 1.05s; }
+.cz3-jewel i.lime { background: linear-gradient(135deg, #f4ffd0, #c8ff3d 50%, #6fa514); box-shadow: 0 0 9px rgba(200,255,61,.95); }
+.cz3-garden::before { content: ""; position: absolute; left: -18px; top: -18px; width: 36px; height: 36px; border-radius: 50%; background: radial-gradient(circle, rgba(200,255,61,.45), transparent 70%); animation: cz3-puff .6s ease-out both; }
+.cz3-garden i { width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: #efffbf; box-shadow: 0 0 8px 2px rgba(200,255,61,.85), 0 0 18px 5px rgba(200,255,61,.25); animation: cz3-fly 1.3s ease-out both; }
+.cz3-garden.cz3-c-some::before { background: radial-gradient(circle, rgba(179,107,255,.5), transparent 70%); }
+.cz3-garden.cz3-c-some i { background: #f3e6ff; box-shadow: 0 0 8px 2px rgba(179,107,255,.9), 0 0 18px 5px rgba(179,107,255,.3); }
+.cz3-garden.cz3-c-no::before { background: radial-gradient(circle, rgba(255,191,94,.45), transparent 70%); }
+.cz3-garden.cz3-c-no i { background: #fff0d6; box-shadow: 0 0 8px 2px rgba(255,191,94,.85), 0 0 18px 5px rgba(255,191,94,.25); }
+.cz3-hud::before, .cz3-hud::after { content: ""; position: absolute; left: -20px; top: -20px; width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid #b36bff; box-shadow: 0 0 10px rgba(179,107,255,.8), inset 0 0 8px rgba(179,107,255,.5); animation: cz3-ring .5s ease-out both; }
+.cz3-hud::after { border-color: #c8ff3d; box-shadow: 0 0 10px rgba(200,255,61,.8); animation-delay: .12s; }
+.cz3-hud i { width: 4px; height: 4px; margin: -2px 0 0 -2px; background: #c8ff3d; box-shadow: 0 0 8px #c8ff3d; animation: cz3-pixel .55s steps(5, end) both; }
+
+/* ---- Each check-in answer: a mote of light flies to the goal's lantern ---- */
+.cz3-mote { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #f4ffd0; box-shadow: 0 0 10px 3px rgba(200,255,61,.9), 0 0 24px 8px rgba(200,255,61,.35); }
+.cz3-mote.cz3-some { background: #f3e6ff; box-shadow: 0 0 10px 3px rgba(179,107,255,.9), 0 0 24px 8px rgba(179,107,255,.35); }
+.cz3-mote.cz3-no { background: #fff0d6; box-shadow: 0 0 10px 3px rgba(255,191,94,.85), 0 0 24px 8px rgba(255,191,94,.3); }
+.cz-lan.cz3-f-yes::after { --flare: rgba(200,255,61,.95); }
+.cz-lan.cz3-f-some::after { --flare: rgba(179,107,255,.95); }
+.cz-lan.cz3-f-no::after { --flare: rgba(255,191,94,.9); }
+.cz-lan.cz3-flare::after { animation: cz3-flare .9s ease-out; }
+
+/* ---- Milestone done: the card catches the light and the crown flares ---- */
+.card.cz3-shine { overflow: hidden; }
+.card.cz3-shine::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 60%; pointer-events: none; background: linear-gradient(100deg, transparent, rgba(248,227,168,.34) 40%, rgba(200,255,61,.3) 60%, transparent); animation: cz3-sweep 1.3s .35s ease-in-out both; }
+#page.cz3-crown > h1::before { animation: cz3-crown 1.6s .3s ease-out; }
+.goal-card.cz3-gemflash::after { animation: cz3-gemflash 1.5s .35s ease-out; }
+
+/* ---- New goal: its gem drops into the niche in a flash of light ---- */
+.goal-card.cz3-new::after { animation: cz3-drop 1s .45s cubic-bezier(.3,1.3,.5,1) backwards; }
+.goal-card.cz3-new::before { animation: cz3-niche 1.4s .95s ease-out; }
+#page > .goal-card.cz3-new { animation: cz3-cardglow 1.8s .95s ease-out; }
+#page.cz-enter > .goal-card.cz3-new { animation: cz-rise .6s cubic-bezier(.2,.8,.2,1) backwards, cz3-cardglow 1.8s .95s ease-out; }
+
+@keyframes cz3-ring { from { transform: scale(.2); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+@keyframes cz3-glint { 0% { transform: translate(0, 0) rotate(45deg) scale(var(--s, 1)); opacity: 1; } 65% { opacity: 1; } 100% { transform: translate(calc(var(--dx) * 1.15), calc(var(--dy) + 18px)) rotate(225deg) scale(.15); opacity: 0; } }
+@keyframes cz3-puff { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.8); opacity: 0; } }
+@keyframes cz3-fly { 0% { transform: translate(0, 0); opacity: 0; } 12% { opacity: 1; } 45% { transform: translate(var(--mx), calc(var(--dy) * .45)); opacity: .55; } 65% { opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+@keyframes cz3-pixel { from { transform: translate(0, 0); opacity: 1; } to { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+@keyframes cz3-flare { 0% { transform: scale(1); filter: brightness(1) drop-shadow(0 0 6px var(--flare)); } 30% { transform: scale(1.45); filter: brightness(2.2) drop-shadow(0 0 16px var(--flare)); } 100% { transform: scale(1); filter: brightness(1) drop-shadow(0 0 8px rgba(200,255,61,.9)); } }
+@keyframes cz3-sweep { from { transform: translateX(-120%) skewX(-12deg); } to { transform: translateX(260%) skewX(-12deg); } }
+@keyframes cz3-crown { 0%, 100% { transform: scale(1) translateY(0); filter: brightness(1) drop-shadow(0 0 0 rgba(200,255,61,0)); } 35% { transform: scale(1.35) translateY(-3px); filter: brightness(2) drop-shadow(0 0 10px rgba(200,255,61,.95)); } }
+@keyframes cz3-gemflash { 0%, 100% { transform: rotate(45deg) scale(1); } 30% { transform: rotate(45deg) scale(1.7); filter: brightness(1.8); box-shadow: 0 0 18px 6px var(--gem), inset 0 0 0 1px #ffffff; } }
+@keyframes cz3-drop { from { transform: translateY(-90px) rotate(45deg) scale(.6); opacity: 0; } 55% { opacity: 1; } 78% { transform: translateY(3px) rotate(45deg) scale(1.15); opacity: 1; } to { transform: translateY(0) rotate(45deg) scale(1); opacity: 1; } }
+@keyframes cz3-niche { 0%, 100% { filter: none; } 25% { filter: brightness(2.4) drop-shadow(0 0 10px rgba(200,255,61,.9)); } }
+@keyframes cz3-cardglow { 40% { box-shadow: 0 0 0 1px rgba(244,255,208,.95), inset 0 0 0 4px #0d1a17, inset 0 0 0 5px rgba(200,255,61,.4), 0 0 34px rgba(200,255,61,.45), 0 12px 30px rgba(0,0,0,.45); } }
+`;
+    const style = document.createElement('style');
+    style.id = 'cz-design-3';
+    style.textContent = CSS3;
+    document.head.appendChild(style);
+    const layer = el('div', { class: 'cz-fx', 'aria-hidden': 'true' });
+    document.body.appendChild(layer);
+
+    // A burst in the style of the world on screen: gold glints, fireflies or neon rings.
+    const buildBurst = (world, x, y, big, tone) => {
+      const w = world === 'garden' || world === 'hud' ? world : 'jewel';
+      const box = el('div', { class: 'cz3-burst cz3-' + w + (big ? ' cz3-big' : '') + (tone ? ' cz3-c-' + tone : ''), style: 'left:' + Math.round(x) + 'px;top:' + Math.round(y) + 'px' });
+      const n = w === 'jewel' ? (big ? 18 : 9) : w === 'garden' ? (big ? 9 : 5) : 4;
+      const axes = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (let i = 0; i < n; i += 1) {
+        const p = el('i');
+        if (w === 'jewel') {
+          const a = (i / n) * Math.PI * 2 + rand(-0.3, 0.3);
+          const r = big ? rand(46, 96) : rand(24, 52);
+          p.style.setProperty('--dx', px(Math.cos(a) * r));
+          p.style.setProperty('--dy', px(Math.sin(a) * r));
+          p.style.setProperty('--s', rand(0.6, 1.15).toFixed(2));
+          p.style.animationDelay = Math.round(rand(0, 70)) + 'ms';
+          if (big && i % 3 === 0) p.className = 'lime';
+        } else if (w === 'garden') {
+          p.style.setProperty('--dx', px(rand(-48, 48)));
+          p.style.setProperty('--dy', px(rand(-118, -46)));
+          p.style.setProperty('--mx', px(rand(-26, 26)));
+          p.style.animationDuration = Math.round(rand(1050, 1600)) + 'ms';
+          p.style.animationDelay = Math.round(rand(0, 140)) + 'ms';
+        } else {
+          const r = rand(24, 38);
+          p.style.setProperty('--dx', px(axes[i % 4][0] * r));
+          p.style.setProperty('--dy', px(axes[i % 4][1] * r));
+        }
+        box.appendChild(p);
+      }
+      return box;
+    };
+    const burst = (world, x, y, big, tone) => {
+      if (calm()) return;
+      while (layer.childElementCount > 16) layer.removeChild(layer.firstChild);
+      const box = buildBurst(world, x, y, big, tone);
+      layer.appendChild(box);
+      setTimeout(() => box.remove(), world === 'garden' ? 2000 : 1200);
+    };
+
+    // Touch magic: a tap (not a scroll) throws off sparks where it landed. Typing in a box stays calm.
+    let down = null;
+    const typing = t => !!(t && t.closest && t.closest('input[type="text"], input[type="date"], input[type="file"], textarea, select'));
+    document.addEventListener('pointerdown', e => { down = e.isPrimary ? { x: e.clientX, y: e.clientY, t: Date.now(), target: e.target } : null; }, { passive: true });
+    document.addEventListener('pointercancel', () => { down = null; }, { passive: true });
+    document.addEventListener('pointerup', e => {
+      const d = down;
+      down = null;
+      try {
+        if (!d || !e.isPrimary || calm() || typing(d.target)) return;
+        if (Math.abs(e.clientX - d.x) > 12 || Math.abs(e.clientY - d.y) > 12 || Date.now() - d.t > 700) return;
+        burst(document.documentElement.getAttribute('data-world') || 'jewel', e.clientX, e.clientY, false, '');
+      } catch (err) { /* effects are optional */ }
+    }, { passive: true });
+
+    // Each check-in answer: a mote flies from the button to the goal's lantern, which flares in the answer's colour.
+    const answerFx = progress => {
+      if (calm() || APP.routeName !== 'checkinStep') return;
+      const page = document.getElementById('page');
+      const lan = page ? page.querySelector('.cz-lan.is-current') : null;
+      if (!lan) return;
+      const btn = page.querySelectorAll('.answers .btn')[PROGRESS.indexOf(progress)];
+      const flare = () => {
+        lan.classList.remove('cz3-flare', 'cz3-f-yes', 'cz3-f-some', 'cz3-f-no');
+        void lan.offsetWidth;                                // restarts the flare on a quick second tap
+        lan.classList.add('cz3-flare', 'cz3-f-' + progress);
+        const r = lan.getBoundingClientRect();
+        burst('garden', r.left + r.width / 2, r.bottom - 17, false, progress);
+      };
+      if (!btn || typeof btn.animate !== 'function') { flare(); return; }
+      const a = btn.getBoundingClientRect();
+      const b = lan.getBoundingClientRect();
+      const x0 = a.left + a.width / 2;
+      const y0 = a.top + a.height / 2;
+      const dx = b.left + b.width / 2 - x0;
+      const dy = b.bottom - 17 - y0;
+      const mote = el('div', { class: 'cz3-mote cz3-' + progress, style: 'left:' + Math.round(x0) + 'px;top:' + Math.round(y0) + 'px' });
+      layer.appendChild(mote);
+      let landed = false;
+      const land = () => { if (landed) return; landed = true; mote.remove(); flare(); };
+      const anim = mote.animate([
+        { transform: 'translate(0px, 0px) scale(1)', opacity: 1 },
+        { transform: 'translate(' + px(dx * 0.3 + 34) + ', ' + px(dy * 0.6) + ') scale(1.3)', opacity: 1, offset: 0.45 },
+        { transform: 'translate(' + px(dx) + ', ' + px(dy) + ') scale(.55)', opacity: 0.9 },
+      ], { duration: 650, easing: 'cubic-bezier(.45,0,.25,1)' });
+      anim.onfinish = land;
+      setTimeout(land, 1000);
+    };
+
+    // Milestone done and new goal are remembered until the screen they belong to is drawn.
+    let pending = null;
+    const cardFor = (page, goalId) => Array.prototype.find.call(page.querySelectorAll('a.goal-card'), a => a.getAttribute('href') === '#' + goalPath(goalId)) || null;
+    const celebrate = (name, p, result) => {
+      if (name === 'answerItem' && PROGRESS.includes(p.progress)) { answerFx(p.progress); return; }
+      if (name === 'completeMilestone') {
+        const btn = document.querySelector('#page form button[type="submit"]');
+        if (btn) { const r = btn.getBoundingClientRect(); burst('jewel', r.left + r.width / 2, r.top + r.height / 2, true, ''); }
+        pending = { kind: 'milestone', goalId: p.goalId, at: Date.now() };
+        return;
+      }
+      if (name === 'addGoal' && result && result.goalId) pending = { kind: 'new', goalId: result.goalId, at: Date.now() };
+    };
+    const baseCommit = commit;
+    commit = function (name, payload, opts) {
+      const result = baseCommit(name, payload, opts);
+      if (result !== null) {
+        try { celebrate(name, isObj(payload) ? payload : {}, result); } catch (e) { console.error(e); }
+      }
+      return result;
+    };
+    const applyPending = () => {
+      const p = pending;
+      if (!p) return;
+      if (Date.now() - p.at > 15000) { pending = null; return; }
+      const page = document.getElementById('page');
+      const screen = APP.routeName;
+      if (!page) return;
+      if (p.kind === 'new' && screen === 'board') {
+        pending = null;
+        const card = cardFor(page, p.goalId);
+        if (!card) return;
+        card.classList.add('cz3-new');
+        setTimeout(() => card.classList.remove('cz3-new'), 3200);
+        requestAnimationFrame(() => {
+          const r = card.getBoundingClientRect();
+          if (r.top < 70 || r.bottom > window.innerHeight - 100) card.scrollIntoView({ block: 'center', behavior: calm() ? 'auto' : 'smooth' });
+        });
+        setTimeout(() => { const r = card.getBoundingClientRect(); burst('jewel', r.left + 27, r.top + 43, false, ''); }, 1200);
+      } else if (p.kind === 'milestone' && screen === 'goal' && currentRoute().goalId === p.goalId) {
+        pending = null;
+        const h = Array.prototype.find.call(page.querySelectorAll('section.card > h2'), x => x.textContent === 'Milestone');
+        if (h) h.parentNode.classList.add('cz3-shine');
+        page.classList.add('cz3-crown');
+        setTimeout(() => { if (h) h.parentNode.classList.remove('cz3-shine'); page.classList.remove('cz3-crown'); }, 2600);
+      } else if (p.kind === 'milestone' && screen === 'board') {
+        pending = null;
+        const card = cardFor(page, p.goalId);
+        if (!card) return;
+        card.classList.add('cz3-gemflash');
+        setTimeout(() => card.classList.remove('cz3-gemflash'), 2600);
+      }
+    };
+    const baseRender = render;
+    render = function () {
+      baseRender();
+      try { applyPending(); } catch (e) { console.error(e); }
+    };
+
+    // Diagnostics says all three parts are in, and the self-test checks the effects.
+    const baseDiagnostics = PAGES.diagnostics;
+    PAGES.diagnostics = (page, route, ctx) => {
+      baseDiagnostics(page, route, ctx);
+      const line = Array.prototype.find.call(page.querySelectorAll('p.small'), x => x.textContent.indexOf('Qutubnuma design pack is installed') === 0);
+      if (line) line.textContent = 'Qutubnuma design pack is installed (parts 1, 2 and 3).';
+    };
+    const baseSelfTest = runSelfTest;
+    runSelfTest = function () {
+      const results = baseSelfTest();
+      const name = '53. Design pack 3: taps spark in every world, and each goal\'s card can be found';
+      try {
+        if (!document.getElementById('cz-design-3')) throw new Error('The part 3 styles are missing.');
+        const NOW = new Date(2026, 10, 11, 12, 0, 0);
+        const d = makeDemoDoc(NOW);
+        const ctx = { doc: d, store: makeStore(memoryBackend(0), 'memory'), now: NOW, today: todayLocal(NOW) };
+        const page = el('main');
+        PAGES.board(page, routeFor('/'), ctx);
+        activeGoals(d).forEach(g => { if (!cardFor(page, g.id)) throw new Error('No board card for "' + g.title + '"'); });
+        [['jewel', 9], ['garden', 5], ['hud', 4]].forEach(([w, n]) => {
+          const b = buildBurst(w, 10, 20, false, 'yes');
+          if (b.children.length !== n) throw new Error(w + ' burst has ' + b.children.length + ' sparks, expected ' + n);
+        });
+        results.push({ name, pass: true, detail: '' });
+      } catch (e) {
+        results.push({ name, pass: false, detail: (e && e.message) || String(e) });
+      }
+      return results;
+    };
+
+    if (APP.selftest) APP.selftest = runSelfTest();
+    if (document.getElementById('page')) render();
+  } catch (e) {
+    console.error(e);
+  }
+})();
 </script>
 </body>
 </html>
